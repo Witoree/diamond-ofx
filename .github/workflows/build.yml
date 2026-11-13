@@ -1,0 +1,24 @@
+name: Windows x64 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Compile OpenFX bundle
+        shell: cmd
+        run: |
+          call build.cmd || exit /b 1
+          if not exist "build\Diamond.ofx.bundle\Contents\Win64\Diamond.ofx" exit /b 1
