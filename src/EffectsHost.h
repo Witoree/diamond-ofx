@@ -1,0 +1,38 @@
+#pragma once
+
+#include "Effects.h"
+
+#include <ofxParam.h>
+#include <ofxProperty.h>
+
+namespace diamond::fx {
+
+enum class Kind {
+    Shake, LensFlare, Glow, BlurMoCurves, DigitalDamage, Rays,
+    UltraZap, PixelSort, RackDefocus, LightLeak, FilmEffect
+};
+
+struct StatusError {
+    OfxStatus status;
+};
+
+struct Parameters {
+    const OfxPropertySuiteV1* properties;
+    const OfxParameterSuiteV1* suite;
+    OfxParamSetHandle set;
+};
+
+struct PixelFormat {
+    Depth depth;
+    int components;
+    bool straightAlpha;
+};
+
+void describeControls(Kind kind, Parameters parameters);
+bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time);
+void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
+                  MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
+                  double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
+                  void* abortContext);
+
+} // namespace diamond::fx
