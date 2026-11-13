@@ -1,0 +1,12 @@
+/build/
+/.vs/
+/.vscode/
+*.user
+*.obj
+*.pdb
+*.lib
+*.exp
+*.ofx
+*.ofx.bundle/
+Thumbs.db
+.DS_Store
