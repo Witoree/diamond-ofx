@@ -6,7 +6,7 @@ Personal project. vibe coded this with AI because I wanted camera shake for my V
 
 **[Download v0.03](https://github.com/Witoree/diamond-ofx/releases/tag/v0.03)** for Windows x64. Close VEGAS and copy `Diamond.ofx.bundle` from the Win64 ZIP to `C:\Program Files\Common Files\OFX\Plugins\`. Reopen VEGAS and look under **Video FX → Diamond**. [All releases](https://github.com/Witoree/diamond-ofx/releases) · [Install guide](docs/INSTALL.md)
 
-`D_Shake` worked for me in v0.01 on VEGAS Pro 23 Steam Edition. I still need to try v0.03 in VEGAS. The effects render on the CPU.
+The effects render on the CPU.
 
 ## Effects
 
