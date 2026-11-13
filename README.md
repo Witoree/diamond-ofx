@@ -2,13 +2,11 @@
 
 ![Diamond OFX](docs/assets/diamond-banner.png)
 
-Diamond OFX is a personal project. I study Game Design and started this because I wanted a camera shake effect for my VEGAS edits. I vibe coded it with AI and put the source here in case anyone wants to see how it works or mess with it. It started with one effect and now has 11.
+Diamond OFX is a personal project. Started this because I wanted a camera shake effect for my VEGAS edits. Insted of paying 80 USD for a Plugin i vibe coded it with AI and put the source here in case anyone wants to mess with it.
 
 Diamond is an open-source OpenFX plug-in suite for Windows x64, developed for VEGAS Pro 23 Steam Edition. Its 11 CPU-rendered effects work with still images and video.
 
 **[Download the v0.03 prerelease](https://github.com/Witoree/diamond-ofx/releases/tag/v0.03)** · `Diamond-0.03-Win64.zip` · [Installation guide](docs/INSTALL.md)
-
-I tried `D_Shake` from v0.01 in VEGAS Pro 23 Steam Edition and it worked for me. The v0.03 build is for Windows x64. I still need to try this version in VEGAS.
 
 ## Install
 
