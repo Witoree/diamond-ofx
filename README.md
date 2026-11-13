@@ -2,38 +2,14 @@
 
 ![Diamond OFX](docs/assets/diamond-banner.png)
 
-Diamond OFX is a personal project. Started this because I wanted a camera shake effect for my VEGAS edits. Insted of paying 80 USD for a Plugin i vibe coded it with AI and put the source here in case anyone wants to mess with it.
+Personal project. I study Game Design and vibe coded this with AI because I wanted camera shake for my VEGAS edits. It now has 11 OpenFX effects.
 
-Diamond is an open-source OpenFX plug-in suite for Windows x64, developed for VEGAS Pro 23 Steam Edition. Its 11 CPU-rendered effects work with still images and video.
+**[Download v0.03](https://github.com/Witoree/diamond-ofx/releases/tag/v0.03)** for Windows x64. Close VEGAS and copy `Diamond.ofx.bundle` from the Win64 ZIP to `C:\Program Files\Common Files\OFX\Plugins\`. Reopen VEGAS and look under **Video FX → Diamond**. [All releases](https://github.com/Witoree/diamond-ofx/releases) · [Install guide](docs/INSTALL.md)
 
-**[Download the v0.03 prerelease](https://github.com/Witoree/diamond-ofx/releases/tag/v0.03)** · `Diamond-0.03-Win64.zip` · [Installation guide](docs/INSTALL.md)
-
-## Install
-
-1. Close VEGAS and extract `Diamond-0.03-Win64.zip`.
-2. If you're updating, move the old `Diamond.ofx.bundle` out of the plug-in directory first. Copy the new `Diamond.ofx.bundle` folder to `C:\Program Files\Common Files\OFX\Plugins\`.
-3. Reopen VEGAS and look under **Video FX → Diamond**.
-
-See the [installation guide](docs/INSTALL.md) for updates, removal, and troubleshooting.
+`D_Shake` worked for me in v0.01 on VEGAS Pro 23 Steam Edition. I still need to try v0.03 in VEGAS. The effects render on the CPU.
 
 ## Effects
 
-| Effect | Use |
-| --- | --- |
-| `D_Shake` | Handheld camera motion with horizontal and vertical displacement, rotation, zoom variation, and motion blur. |
-| `D_LensFlare` | Anamorphic or spherical lens flare with streaks, chromatic halos, reflections, and a flare-only output. |
-| `D_Glow` | Highlight bloom with a soft threshold, two diffusion scales, and Add or Screen blending. |
-| `D_BlurMoCurves` | Motion blur driven by keyframed position, zoom, and rotation. Set the shutter duration, offset, and exposure bias. |
-| `D_DigitalDamage` | Glitch effects with displaced bands, RGB separation, macroblocks, scanlines, and signal dropout. |
-| `D_Rays` | Colored light rays generated from the bright parts of the clip. |
-| `D_UltraZap` | Animated electrical arcs with branching, glow, and adjustable endpoints. |
-| `D_PixelSort` | Sorts runs of pixels by luminance, color channel, or saturation along an adjustable direction. |
-| `D_RackDefocus` | Optical defocus with circular, polygonal, or anamorphic bokeh and highlight gain. |
-| `D_LightLeak` | Warm, cool, or golden light leaks with adjustable placement, falloff, and motion. |
-| `D_FilmEffect` | Print-style grading with animated grain, halation, and vignette. |
+`D_Shake`, `D_LensFlare`, `D_Glow`, `D_BlurMoCurves`, `D_DigitalDamage`, `D_Rays`, `D_UltraZap`, `D_PixelSort`, `D_RackDefocus`, `D_LightLeak`, and `D_FilmEffect`.
 
-## Build and contribute
-
-Use Visual Studio 2022 or Visual Studio Build Tools with the **Desktop development with C++** workload. Run `build.cmd` from the repository root to create `build\Diamond.ofx.bundle`. [Build guide](docs/BUILD.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
-
-Diamond uses independent implementations informed by public effect documentation. Diamond's code is [MIT licensed](LICENSE.txt). The bundled OpenFX SDK headers retain their [BSD 3-Clause license](third_party/openfx/LICENSE.md). [Sapphire OpenFX effect reference](https://borisfx.com/documentation/sapphire/ofx/name-index/)
+[Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Contribute](CONTRIBUTING.md) · [MIT license](LICENSE.txt) · [OpenFX license](third_party/openfx/LICENSE.md)
