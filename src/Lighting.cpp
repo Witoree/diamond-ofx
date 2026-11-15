@@ -1,4 +1,5 @@
 #include "Effects.h"
+#include "Gpu05.h"
 
 #include <algorithm>
 #include <array>
@@ -191,6 +192,9 @@ public:
           width_(static_cast<std::size_t>(std::max(0, bounds.x2 - bounds.x1))),
           pixels_(width_ * static_cast<std::size_t>(std::max(0, bounds.y2 - bounds.y1))) {}
 
+    const float* data() const { return pixels_.data(); }
+    std::size_t byteCount() const { return pixels_.size() * sizeof(float); }
+
     bool fill(const Context& context, double threshold, double softness) {
         const float cutoff = static_cast<float>(threshold);
         const float knee = static_cast<float>(softness);
@@ -270,6 +274,91 @@ Color gainAndTint(double brightness, double red, double green, double blue) {
             static_cast<float>(brightness * blue)};
 }
 
+struct RayGpuStep {
+    float offset, weight;
+};
+
+struct RayGpuSettings {
+    int maskX, maskY, maskWidth, maskHeight, count, lightOnly;
+    float lightX, lightY, tintR, tintG, tintB;
+    std::array<RayGpuStep, kMaxRaySamples> steps;
+};
+
+constexpr char kRaysGpuCode[] = R"CLC(
+typedef struct { float offset,weight; } RayStep;
+typedef struct {
+    int maskX,maskY,maskWidth,maskHeight,count,lightOnly;
+    float lightX,lightY,tintR,tintG,tintB;
+    RayStep steps[96];
+} Settings;
+
+float read_highlight(__global const float* highlights, __global const Settings* s, int x, int y) {
+    if (x < s->maskX || y < s->maskY || x >= s->maskX + s->maskWidth
+        || y >= s->maskY + s->maskHeight) {
+        return 0.0f;
+    }
+    return highlights[(size_t)(y - s->maskY)*s->maskWidth + x - s->maskX];
+}
+
+float sample_highlight(__global const float* highlights, __global const Settings* s, float x, float y) {
+    if (!(x > s->maskX-1.0f && x < s->maskX+s->maskWidth
+       && y > s->maskY-1.0f && y < s->maskY+s->maskHeight)) {
+        return 0.0f;
+    }
+    const int x0 = convert_int_rtn(x);
+    const int y0 = convert_int_rtn(y);
+    const float u = x-x0;
+    const float v = y-y0;
+    if (x0 >= s->maskX && y0 >= s->maskY && x0+1 < s->maskX+s->maskWidth
+        && y0+1 < s->maskY+s->maskHeight) {
+        const size_t at = (size_t)(y0-s->maskY)*s->maskWidth + x0-s->maskX;
+        return (highlights[at]*(1.0f-u) + highlights[at+1]*u)*(1.0f-v)
+            + (highlights[at+s->maskWidth]*(1.0f-u) + highlights[at+s->maskWidth+1]*u)*v;
+    }
+    return (read_highlight(highlights,s,x0,y0)*(1.0f-u) + read_highlight(highlights,s,x0+1,y0)*u)*(1.0f-v)
+        + (read_highlight(highlights,s,x0,y0+1)*(1.0f-u) + read_highlight(highlights,s,x0+1,y0+1)*u)*v;
+}
+
+__kernel void diamond_rays(__global const float4* source, __global float4* output,
+                           GpuImageInfo image, __global const Settings* s,
+                           __global const float* highlights) {
+    const int column = (int)get_global_id(0);
+    const int row = (int)get_global_id(1);
+    const int x = column + image.outX;
+    const int y = row + image.outY;
+    const float towardX = s->lightX-x;
+    const float towardY = s->lightY-y;
+    float energy = 0.0f;
+    for (int i = 0; i < s->count; ++i) {
+        const RayStep step = s->steps[i];
+        energy += step.weight*sample_highlight(highlights, s, x+towardX*step.offset, y+towardY*step.offset);
+    }
+    const float4 base = s->lightOnly ? (float4)(0.0f) : diamond_read(source, image, x, y);
+    const float3 light = energy*(float3)(s->tintR,s->tintG,s->tintB);
+    const float coverage = clamp(fmax(fmax(light.x,light.y),light.z),0.0f,1.0f);
+    output[(size_t)row * image.outWidth + column] = (float4)(base.xyz+light,base.w+(1.0f-base.w)*coverage);
+}
+)CLC";
+
+bool renderRaysOnGpu(const Context& context, const RaysSettings& settings, Rect available, Point light,
+                     Color tint, const HighlightMask& highlights, int count,
+                     const std::array<double, kMaxRaySamples>& offsets,
+                     const std::array<float, kMaxRaySamples>& weights) {
+    const std::size_t pixels = static_cast<std::size_t>(width(context.output.bounds))
+        * height(context.output.bounds);
+    if (pixels < 256 * 256 || pixels * count < 4'000'000 || !highlights.byteCount()) {
+        return false;
+    }
+    RayGpuSettings gpu{available.x1, available.y1, width(available), height(available), count,
+        settings.raysOnly ? 1 : 0, static_cast<float>(light.x), static_cast<float>(light.y),
+        tint.r, tint.g, tint.b, {}};
+    for (int i = 0; i < count; ++i) {
+        gpu.steps[i] = {static_cast<float>(offsets[i]), weights[i]};
+    }
+    return runGpu05(context, kRaysGpuCode, "diamond_rays", &gpu, sizeof(gpu),
+                    highlights.data(), highlights.byteCount());
+}
+
 }  // namespace
 
 void renderLensFlare(const Context& context, const LensFlareSettings& settings) {
@@ -331,6 +420,9 @@ void renderRays(const Context& context, const RaysSettings& settings) {
     const Point light = framePoint(frame, settings.centerX, settings.centerY);
     const double intensity = settings.brightness * std::min(settings.length * 4.0, 1.0);
     const Color tint = gainAndTint(intensity, settings.red, settings.green, settings.blue);
+    if (renderRaysOnGpu(context, settings, available, light, tint, highlights, samples, offsets, weights)) {
+        return;
+    }
     renderLight(context, settings.raysOnly, tint, [&](int x, int y) {
         const double towardX = light.x - x;
         const double towardY = light.y - y;

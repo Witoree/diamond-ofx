@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Effects.h"
+#include "Transitions05.h"
 
 #include <ofxParam.h>
 #include <ofxProperty.h>
@@ -11,7 +12,9 @@ enum class Kind {
     Shake, LensFlare, Glow, BlurMoCurves, DigitalDamage, Rays,
     UltraZap, PixelSort, RackDefocus, LightLeak, FilmEffect,
     VHSDamage, FilmBurn, DistortRGB, WarpFishEye, WarpWaves,
-    Glare, Glint, Streaks, HalfTone, BleachBypass
+    Glare, Glint, Streaks, HalfTone, BleachBypass,
+    Blur, BlurDirectional, Sharpen, Vignette, Grain, Halation,
+    Dissolve, DissolveGlow, DissolveShake, SwishPan
 };
 
 struct StatusError {
@@ -30,11 +33,25 @@ struct PixelFormat {
     bool straightAlpha;
 };
 
+constexpr bool isTransition(Kind kind) {
+    return kind >= Kind::Dissolve;
+}
+
+constexpr TransitionKind transitionKind(Kind kind) {
+    return static_cast<TransitionKind>(static_cast<int>(kind) - static_cast<int>(Kind::Dissolve));
+}
+
 void describeControls(Kind kind, Parameters parameters);
 bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time);
+TransitionSettings transitionSettingsAt(Kind kind, Parameters parameters, OfxTime time);
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
                   void* abortContext, const ShakeSettings* shake = nullptr);
+void renderTransitionEffect(TransitionKind kind, const TransitionSettings& settings, double progress,
+                            ImageView from, PixelFormat fromFormat, ImageView to, PixelFormat toFormat,
+                            MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
+                            double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
+                            void* abortContext);
 
 } // namespace diamond::fx

@@ -2,6 +2,7 @@
 #include "NewOptics.h"
 #include "NewStylize.h"
 #include "NewWarp.h"
+#include "Video05.h"
 
 #include <initializer_list>
 #include <limits>
@@ -236,6 +237,73 @@ constexpr Number<BleachBypassSettings> bleachNumbers[] = {
     {"highlightRolloff", "Highlight roll-off", &BleachBypassSettings::highlightRolloff, 0.25, 0, 1, 0.01},
     {"temperature", "Temperature", &BleachBypassSettings::temperature, -0.08, -1, 1, 0.01},
     {"mix", "Mix", &BleachBypassSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<BlurSettings05> blur05Numbers[] = {
+    {"radius", "Radius (% of height)", &BlurSettings05::radius, 0.65, 0, 15, 0.05},
+    {"mix", "Mix", &BlurSettings05::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<DirectionalBlurSettings> directionalBlurNumbers[] = {
+    {"length", "Length (% of height)", &DirectionalBlurSettings::length, 5, 0, 35, 0.1},
+    {"angle", "Angle (degrees)", &DirectionalBlurSettings::angle, 0, -360, 360, 1},
+    {"bias", "Bias", &DirectionalBlurSettings::bias, 0, -1, 1, 0.01},
+    {"mix", "Mix", &DirectionalBlurSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<SharpenSettings> sharpenNumbers[] = {
+    {"amount", "Amount", &SharpenSettings::amount, 0.65, 0, 4, 0.05},
+    {"radius", "Radius (% of height)", &SharpenSettings::radius, 0.18, 0, 4, 0.02},
+    {"threshold", "Threshold", &SharpenSettings::threshold, 0.02, 0, 1, 0.01},
+    {"mix", "Mix", &SharpenSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<VignetteSettings> vignetteNumbers[] = {
+    {"centerX", "Center X", &VignetteSettings::centerX, 0.5, -1, 2, 0.01},
+    {"centerY", "Center Y", &VignetteSettings::centerY, 0.5, -1, 2, 0.01},
+    {"radius", "Radius", &VignetteSettings::radius, 0.64, 0.02, 2, 0.02},
+    {"softness", "Softness", &VignetteSettings::softness, 0.45, 0, 1, 0.01},
+    {"roundness", "Roundness", &VignetteSettings::roundness, 0.45, 0, 1, 0.01},
+    {"angle", "Angle (degrees)", &VignetteSettings::angle, 0, -360, 360, 1},
+    {"amount", "Amount", &VignetteSettings::amount, 0.5, 0, 1, 0.01}
+};
+
+constexpr Number<GrainSettings> grainNumbers[] = {
+    {"amount", "Amount", &GrainSettings::amount, 0.22, 0, 1, 0.01},
+    {"size", "Size (px at 1080p)", &GrainSettings::size, 1.35, 0.25, 12, 0.05},
+    {"roughness", "Roughness", &GrainSettings::roughness, 0.5, 0, 1, 0.01},
+    {"color", "Color grain", &GrainSettings::color, 0.12, 0, 1, 0.01},
+    {"response", "Luminance response", &GrainSettings::response, 0.7, 0, 1, 0.01},
+    {"speed", "Update rate (Hz)", &GrainSettings::speed, 24, 0, 120, 1}
+};
+
+constexpr Number<HalationSettings> halationNumbers[] = {
+    {"threshold", "Threshold", &HalationSettings::threshold, 0.62, 0, 4, 0.01},
+    {"knee", "Soft knee", &HalationSettings::knee, 0.2, 0, 2, 0.01},
+    {"radius", "Radius (% of height)", &HalationSettings::radius, 0.9, 0, 8, 0.05},
+    {"amount", "Amount", &HalationSettings::amount, 0.72, 0, 4, 0.05}
+};
+
+constexpr Number<TransitionSettings> transitionCommon[] = {
+    {"ease", "Ease", &TransitionSettings::ease, .5, 0, 1, .01}
+};
+
+constexpr Number<TransitionSettings> transitionGlow[] = {
+    {"intensity", "Intensity", &TransitionSettings::intensity, 1, 0, 4, .05},
+    {"threshold", "Highlight threshold", &TransitionSettings::threshold, .55, 0, 4, .01},
+    {"radius", "Radius (% of height)", &TransitionSettings::radius, 3.5, 0, 15, .1}
+};
+
+constexpr Number<TransitionSettings> transitionShake[] = {
+    {"shakeAmount", "Shake (% of width)", &TransitionSettings::shakeAmount, 1.75, 0, 15, .05},
+    {"tilt", "Tilt (degrees)", &TransitionSettings::tilt, 2, 0, 15, .1},
+    {"frequency", "Shake cycles", &TransitionSettings::frequency, 5, 0, 30, .1},
+    {"shutter", "Shutter", &TransitionSettings::shutter, .45, 0, 1, .01}
+};
+
+constexpr Number<TransitionSettings> transitionSwish[] = {
+    {"angle", "Direction (degrees)", &TransitionSettings::angle, 0, -360, 360, 1},
+    {"shutter", "Shutter", &TransitionSettings::shutter, .45, 0, 1, .01}
 };
 
 class Controls {
@@ -500,15 +568,96 @@ void describeControls(Kind kind, Parameters parameters)
     case Kind::BleachBypass:
         controls.numbers(bleachNumbers);
         break;
+    case Kind::Blur:
+        controls.numbers(blur05Numbers);
+        controls.choice("edges", "Edges", 0, {"Reflect", "Clamp", "Transparent"});
+        break;
+    case Kind::BlurDirectional:
+        controls.numbers(directionalBlurNumbers);
+        controls.integer("samples", "Exposure samples", 24, 4, 96, 96);
+        controls.choice("edges", "Edges", 0, {"Reflect", "Clamp", "Transparent"});
+        break;
+    case Kind::Sharpen:
+        controls.numbers(sharpenNumbers);
+        break;
+    case Kind::Vignette:
+        controls.numbers(vignetteNumbers);
+        controls.tint(0, 0, 0);
+        break;
+    case Kind::Grain:
+        controls.numbers(grainNumbers);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
+        break;
+    case Kind::Halation:
+        controls.numbers(halationNumbers);
+        controls.tint(1, .26, .09);
+        controls.checkbox("halationOnly", "Halation only");
+        break;
+    case Kind::Dissolve:
+        controls.numbers(transitionCommon);
+        break;
+    case Kind::DissolveGlow:
+        controls.numbers(transitionCommon);
+        controls.numbers(transitionGlow);
+        controls.tint(1, .85, .65);
+        break;
+    case Kind::DissolveShake:
+        controls.numbers(transitionCommon);
+        controls.numbers(transitionShake);
+        controls.integer("samples", "Exposure samples", 9, 1, 32, 32);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
+        break;
+    case Kind::SwishPan:
+        controls.numbers(transitionCommon);
+        controls.numbers(transitionSwish);
+        controls.integer("samples", "Exposure samples", 9, 1, 32, 32);
+        break;
     case Kind::Shake:
         break;
     }
+}
+
+TransitionSettings transitionSettingsAt(Kind kind, Parameters parameters, OfxTime time)
+{
+    const Controls controls(parameters);
+    TransitionSettings settings{};
+    controls.read(settings, transitionCommon, time);
+    switch (kind) {
+    case Kind::DissolveGlow:
+        controls.read(settings, transitionGlow, time);
+        controls.readTint(settings, time);
+        break;
+    case Kind::DissolveShake:
+        controls.read(settings, transitionShake, time);
+        settings.samples = std::clamp(controls.readInt("samples", time), 1, 32);
+        settings.seed = controls.readInt("seed", time);
+        break;
+    case Kind::SwishPan:
+        controls.read(settings, transitionSwish, time);
+        settings.samples = std::clamp(controls.readInt("samples", time), 1, 32);
+        break;
+    default:
+        break;
+    }
+    return settings;
 }
 
 bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time)
 {
     const Controls controls(parameters);
     switch (kind) {
+    case Kind::Blur:
+        return controls.readDouble("radius", time) <= 0 || controls.readDouble("mix", time) <= 0;
+    case Kind::BlurDirectional:
+        return controls.readDouble("length", time) <= 0 || controls.readDouble("mix", time) <= 0;
+    case Kind::Sharpen:
+        return controls.readDouble("amount", time) <= 0 || controls.readDouble("radius", time) <= 0
+            || controls.readDouble("mix", time) <= 0;
+    case Kind::Vignette:
+    case Kind::Grain:
+        return controls.readDouble("amount", time) <= 0;
+    case Kind::Halation:
+        return controls.readDouble("amount", time) <= 0 && controls.readInt("halationOnly", time) == 0;
     case Kind::UltraZap:
         return controls.readDouble("brightness", time) <= 0 && controls.readInt("boltOnly", time) == 0;
     case Kind::LightLeak:
@@ -722,6 +871,53 @@ void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& con
         renderBleachBypass(context, settings);
         break;
     }
+    case Kind::Blur: {
+        BlurSettings05 settings{};
+        controls.read(settings, blur05Numbers, time);
+        settings.edge = controls.readEdges(time);
+        renderBlur(context, settings);
+        break;
+    }
+    case Kind::BlurDirectional: {
+        DirectionalBlurSettings settings{};
+        controls.read(settings, directionalBlurNumbers, time);
+        settings.samples = std::clamp(controls.readInt("samples", time), 4, 96);
+        settings.edge = controls.readEdges(time);
+        renderBlurDirectional(context, settings);
+        break;
+    }
+    case Kind::Sharpen: {
+        SharpenSettings settings{};
+        controls.read(settings, sharpenNumbers, time);
+        renderSharpen(context, settings);
+        break;
+    }
+    case Kind::Vignette: {
+        VignetteSettings settings{};
+        controls.read(settings, vignetteNumbers, time);
+        controls.readTint(settings, time);
+        renderVignette(context, settings);
+        break;
+    }
+    case Kind::Grain: {
+        GrainSettings settings{};
+        controls.read(settings, grainNumbers, time);
+        settings.seed = controls.readInt("seed", time);
+        renderGrain(context, settings);
+        break;
+    }
+    case Kind::Halation: {
+        HalationSettings settings{};
+        controls.read(settings, halationNumbers, time);
+        controls.readTint(settings, time);
+        settings.halationOnly = controls.readInt("halationOnly", time) != 0;
+        renderHalation(context, settings);
+        break;
+    }
+    case Kind::Dissolve:
+    case Kind::DissolveGlow:
+    case Kind::DissolveShake:
+    case Kind::SwishPan:
     case Kind::Shake:
         break;
     }

@@ -1,4 +1,5 @@
 #include "Effects.h"
+#include "Gpu05.h"
 
 #include <algorithm>
 #include <array>
@@ -152,6 +153,63 @@ void renderSingle(const Context& context, const Affine& inverse, Edge edge) {
     }
 }
 
+struct ExposureGpuSample {
+    float xx, xy, tx, yx, yy, ty, weight;
+};
+
+struct ExposureGpuSettings {
+    int count, edge;
+};
+
+constexpr char kExposureGpuCode[] = R"CLC(
+typedef struct { float xx,xy,tx,yx,yy,ty,weight; } ExposureSample;
+typedef struct { int count,edge; } Settings;
+
+__kernel void diamond_exposure(__global const float4* source, __global float4* output,
+                               GpuImageInfo image, __global const Settings* settings,
+                               __global const ExposureSample* steps) {
+    const int column = (int)get_global_id(0);
+    const int row = (int)get_global_id(1);
+    const float x = (float)(column + image.outX);
+    const float y = (float)(row + image.outY);
+    float4 sum = (float4)(0.0f);
+    for (int i = 0; i < settings->count; ++i) {
+        const ExposureSample step = steps[i];
+        const float sx = step.xx*x + step.xy*y + step.tx;
+        const float sy = step.yx*x + step.yy*y + step.ty;
+        sum += diamond_sample(source, image, sx, sy, settings->edge) * step.weight;
+    }
+    output[(size_t)row * image.outWidth + column] = sum;
+}
+)CLC";
+
+bool renderExposureOnGpu(const Context& context, const Exposure& exposure, Edge edge) {
+    const std::size_t pixels = static_cast<std::size_t>(width(context.output.bounds))
+        * height(context.output.bounds);
+    if (pixels < 256 * 256 || pixels * exposure.count < 4'000'000) {
+        return false;
+    }
+
+    const auto representable = [](const Affine& t) {
+        const auto coefficient = [](double value) { return std::isfinite(value) && std::abs(value) < 1e7; };
+        return coefficient(t.xx) && coefficient(t.xy) && coefficient(t.tx)
+            && coefficient(t.yx) && coefficient(t.yy) && coefficient(t.ty);
+    };
+    std::array<ExposureGpuSample, kMaxExposureSamples> steps{};
+    for (int i = 0; i < exposure.count; ++i) {
+        const auto& sample = exposure.samples[i];
+        const Affine& t = sample.inverse;
+        if (!representable(t)) {
+            return false;
+        }
+        steps[i] = {static_cast<float>(t.xx), static_cast<float>(t.xy), static_cast<float>(t.tx),
+                    static_cast<float>(t.yx), static_cast<float>(t.yy), static_cast<float>(t.ty), sample.weight};
+    }
+    const ExposureGpuSettings settings{exposure.count, static_cast<int>(edge)};
+    return runGpu05(context, kExposureGpuCode, "diamond_exposure", &settings, sizeof(settings),
+                    steps.data(), exposure.count * sizeof(steps[0]));
+}
+
 } // namespace
 
 void renderBlurMoCurves(const Context& context, const BlurSettings& settings) {
@@ -161,6 +219,9 @@ void renderBlurMoCurves(const Context& context, const BlurSettings& settings) {
     const Exposure exposure = buildExposure(context, settings);
     if (exposure.count == 1) {
         renderSingle(context, exposure.samples[0].inverse, settings.edge);
+        return;
+    }
+    if (renderExposureOnGpu(context, exposure, settings.edge)) {
         return;
     }
 

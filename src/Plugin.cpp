@@ -1,10 +1,12 @@
 #include "EffectsHost.h"
+#include "Gpu05.h"
 
 #include <ofxCore.h>
 #include <ofxImageEffect.h>
 #include <ofxParam.h>
 #include <ofxProperty.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -14,7 +16,9 @@
 namespace {
 
 using diamond::fx::Kind;
+using diamond::fx::PixelFormat;
 using diamond::fx::StatusError;
+using diamond::fx::isTransition;
 
 struct EffectDescription {
     const char* label;
@@ -43,7 +47,17 @@ constexpr EffectDescription descriptions[] = {
     {"D_Glint", "Draw crisp star points around small bright details.", false},
     {"D_Streaks", "Stretch bright regions into directional light streaks.", false},
     {"D_HalfTone", "Turn footage into a screened print with mono, RGB or CMYK dots.", false},
-    {"D_BleachBypass", "Apply a silver-retention look with controlled color and contrast.", false}
+    {"D_BleachBypass", "Apply a silver-retention look with controlled color and contrast.", false},
+    {"D_Blur", "Soften the image with a controllable blur radius.", false},
+    {"D_BlurDirectional", "Smear detail along an adjustable direction and bias.", false},
+    {"D_Sharpen", "Enhance detail with a threshold to protect smooth areas.", false},
+    {"D_Vignette", "Shape and tint the edges of the frame.", false},
+    {"D_Grain", "Add seeded film grain with luminance response and color control.", true},
+    {"D_Halation", "Spread a tinted optical halo around bright details.", false},
+    {"D_Dissolve", "A smooth cross dissolve between two clips.", false},
+    {"D_DissolveGlow", "Blend two clips through a glowing highlight bloom.", false},
+    {"D_DissolveShake", "Blend two clips with a deterministic camera shake.", false},
+    {"D_SwishPan", "Transition between two clips with a directional whip pan.", false}
 };
 
 const EffectDescription& description(Kind kind)
@@ -52,6 +66,8 @@ const EffectDescription& description(Kind kind)
 }
 
 constexpr const char* sourceName = kOfxImageEffectSimpleSourceClipName;
+constexpr const char* sourceFromName = kOfxImageEffectTransitionSourceFromClipName;
+constexpr const char* sourceToName = kOfxImageEffectTransitionSourceToClipName;
 constexpr const char* outputName = kOfxImageEffectOutputClipName;
 
 std::atomic<OfxHost*> host{nullptr};
@@ -183,7 +199,8 @@ void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, 
     // light and transparent warp edges, even when the source is RGB.
     const bool canCreateAlpha = kind == Kind::FilmBurn || kind == Kind::Glare
         || kind == Kind::Glint || kind == Kind::Streaks || kind == Kind::DistortRGB
-        || kind == Kind::WarpFishEye || kind == Kind::WarpWaves;
+        || kind == Kind::WarpFishEye || kind == Kind::WarpWaves || kind == Kind::Blur
+        || kind == Kind::BlurDirectional || kind == Kind::Halation;
     if (canCreateAlpha && is(stringProperty(effectProperties(effect), kOfxImageEffectPropContext),
                              kOfxImageEffectContextGeneral)) {
         const auto* current = host.load();
@@ -209,8 +226,12 @@ void describe(OfxImageEffectHandle effect, Kind kind)
     require(props->propSetString(properties, kOfxPropLabel, 0, description(kind).label));
     require(props->propSetString(properties, kOfxImageEffectPluginPropGrouping, 0, "Diamond"));
     props->propSetString(properties, kOfxPropPluginDescription, 0, description(kind).description);
-    require(props->propSetString(properties, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextFilter));
-    require(props->propSetString(properties, kOfxImageEffectPropSupportedContexts, 1, kOfxImageEffectContextGeneral));
+    if (isTransition(kind)) {
+        require(props->propSetString(properties, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextTransition));
+    } else {
+        require(props->propSetString(properties, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextFilter));
+        require(props->propSetString(properties, kOfxImageEffectPropSupportedContexts, 1, kOfxImageEffectContextGeneral));
+    }
     require(props->propSetString(properties, kOfxImageEffectPropSupportedPixelDepths, 0, kOfxBitDepthByte));
     require(props->propSetString(properties, kOfxImageEffectPropSupportedPixelDepths, 1, kOfxBitDepthShort));
     require(props->propSetString(properties, kOfxImageEffectPropSupportedPixelDepths, 2, kOfxBitDepthFloat));
@@ -244,10 +265,18 @@ OfxPropertySetHandle defineControl(OfxParamSetHandle set, const char* type, cons
 
 void describeInContext(OfxImageEffectHandle effect, Kind kind)
 {
-    describeClip(effect, sourceName);
+    const auto set = parameters(effect);
+    if (isTransition(kind)) {
+        describeClip(effect, sourceFromName);
+        describeClip(effect, sourceToName);
+        // The host supplies this standard parameter. Its label and range belong to the host.
+        OfxPropertySetHandle progress = nullptr;
+        require(params->paramDefine(set, kOfxParamTypeDouble, kOfxImageEffectTransitionParamName, &progress));
+    } else {
+        describeClip(effect, sourceName);
+    }
     describeClip(effect, outputName);
 
-    const auto set = parameters(effect);
     if (kind != Kind::Shake) {
         diamond::fx::describeControls(kind, {props, params, set});
         return;
@@ -315,11 +344,25 @@ OfxTime actionTime(OfxPropertySetHandle inArgs)
     return time;
 }
 
+double transitionProgress(OfxParamSetHandle set, OfxTime time)
+{
+    double progress = 0.0;
+    readValue(set, kOfxImageEffectTransitionParamName, time, progress);
+    return std::isfinite(progress) ? std::clamp(progress, 0.0, 1.0) : 0.0;
+}
+
 OfxStatus identity(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs,
                    OfxPropertySetHandle outArgs, Kind kind)
 {
     const auto time = actionTime(inArgs);
-    if (kind == Kind::Shake) {
+    const char* identitySource = sourceName;
+    if (isTransition(kind)) {
+        const double progress = transitionProgress(parameters(effect), time);
+        if (progress > 0.0 && progress < 1.0) {
+            return kOfxStatReplyDefault;
+        }
+        identitySource = progress <= 0.0 ? sourceFromName : sourceToName;
+    } else if (kind == Kind::Shake) {
         const auto settings = settingsAt(effect, time);
         const bool axesDisabled = settings.xPercent == 0.0 && settings.yPercent == 0.0
             && settings.tiltDegrees == 0.0 && settings.zoomPercent == 0.0;
@@ -329,29 +372,49 @@ OfxStatus identity(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs,
     } else if (!diamond::fx::controlsAreIdentity(kind, {props, params, parameters(effect)}, time)) {
         return kOfxStatReplyDefault;
     }
-    require(props->propSetString(outArgs, kOfxPropName, 0, sourceName));
+    require(props->propSetString(outArgs, kOfxPropName, 0, identitySource));
     require(props->propSetDouble(outArgs, kOfxPropTime, 0, time));
     return kOfxStatOK;
 }
 
-OfxStatus regionsOfInterest(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, OfxPropertySetHandle outArgs)
+OfxStatus setSourceRegion(OfxImageEffectHandle effect, OfxTime time, OfxPropertySetHandle outArgs,
+                          const char* clipName, const char* propertyName)
 {
-    if (!effects->clipGetRegionOfDefinition) {
-        return kOfxStatReplyDefault;
-    }
     OfxRectD sourceRegion{};
-    const auto status = effects->clipGetRegionOfDefinition(clip(effect, sourceName), actionTime(inArgs), &sourceRegion);
+    const auto status = effects->clipGetRegionOfDefinition(clip(effect, clipName), time, &sourceRegion);
     if (status != kOfxStatOK) {
         return kOfxStatReplyDefault;
     }
     const double values[] = {sourceRegion.x1, sourceRegion.y1, sourceRegion.x2, sourceRegion.y2};
-    return props->propSetDoubleN(outArgs, "OfxImageClipPropRoI_Source", 4, values);
+    return props->propSetDoubleN(outArgs, propertyName, 4, values);
+}
+
+OfxStatus regionsOfInterest(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, OfxPropertySetHandle outArgs,
+                            Kind kind)
+{
+    if (!effects->clipGetRegionOfDefinition) {
+        return kOfxStatReplyDefault;
+    }
+    const auto time = actionTime(inArgs);
+    if (!isTransition(kind)) {
+        return setSourceRegion(effect, time, outArgs, sourceName, "OfxImageClipPropRoI_Source");
+    }
+
+    const auto from = setSourceRegion(effect, time, outArgs, sourceFromName, "OfxImageClipPropRoI_SourceFrom");
+    if (from != kOfxStatOK && from != kOfxStatReplyDefault) {
+        return from;
+    }
+    const auto to = setSourceRegion(effect, time, outArgs, sourceToName, "OfxImageClipPropRoI_SourceTo");
+    return to == kOfxStatReplyDefault ? from : to;
 }
 
 class Image {
 public:
     Image(OfxImageClipHandle input, OfxTime time, bool required)
     {
+        if (!input && !required) {
+            return;
+        }
         const auto status = effects->clipGetImage(input, time, nullptr, &properties_);
         if (status == kOfxStatFailed && !required) {
             properties_ = nullptr;
@@ -389,11 +452,6 @@ diamond::Rect rectProperty(OfxPropertySetHandle properties, const char* key, con
     require(status);
     return {values[0], values[1], values[2], values[3]};
 }
-
-struct PixelFormat {
-    diamond::Depth depth;
-    int components;
-};
 
 PixelFormat pixelFormat(OfxPropertySetHandle image)
 {
@@ -434,6 +492,30 @@ diamond::MutableImageView imageView(OfxPropertySetHandle image)
     return {data, rowBytes, rectProperty(image, kOfxImagePropBounds)};
 }
 
+const char* premultiplication(OfxPropertySetHandle image, OfxPropertySetHandle clipProperties)
+{
+    const auto value = stringProperty(image, kOfxImageEffectPropPreMultiplication);
+    return value ? value : stringProperty(clipProperties, kOfxImageEffectPropPreMultiplication);
+}
+
+struct InputFrame {
+    diamond::ImageView view;
+    PixelFormat format;
+};
+
+InputFrame inputFrame(const Image& image, OfxPropertySetHandle clipProperties, PixelFormat outputFormat)
+{
+    InputFrame frame{{}, outputFormat};
+    if (const auto imageProperties = image.properties()) {
+        frame.format = pixelFormat(imageProperties);
+        const auto view = imageView(imageProperties);
+        frame.view = {view.data, view.rowBytes, view.bounds};
+    }
+    frame.format.straightAlpha = frame.format.components == 4
+        && is(premultiplication(image.properties(), clipProperties), kOfxImageUnPreMultiplied);
+    return frame;
+}
+
 double positiveProperty(OfxPropertySetHandle properties, const char* name, int index, double fallback)
 {
     double value = 0.0;
@@ -464,18 +546,8 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     const Image output(clip(effect, outputName, &outputClipProperties), time, true);
     const auto outputProperties = output.properties();
     const auto destination = imageView(outputProperties);
-    const auto format = pixelFormat(outputProperties);
+    auto format = pixelFormat(outputProperties);
     const auto frame = rectProperty(outputProperties, kOfxImagePropRegionOfDefinition, &destination.bounds);
-    OfxPropertySetHandle sourceClipProperties = nullptr;
-    const Image input(clip(effect, sourceName, &sourceClipProperties), time, false);
-    diamond::ImageView source{};
-    auto inputFormat = format;
-    if (const auto inputProperties = input.properties()) {
-        inputFormat = pixelFormat(inputProperties);
-        const auto view = imageView(inputProperties);
-        source = {view.data, view.rowBytes, view.bounds};
-    }
-
     const double outputFps = positiveProperty(outputClipProperties, kOfxImageEffectPropFrameRate, 0, 30.0);
     const double fps = positiveProperty(effectProperties(effect), kOfxImageEffectPropFrameRate, 0, outputFps);
 
@@ -484,40 +556,50 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     const double par = positiveProperty(outputProperties, kOfxImagePropPixelAspectRatio, 0, 1.0);
     const auto field = stringProperty(outputProperties, kOfxImagePropField);
     const double fieldScale = is(field, kOfxImageFieldLower) || is(field, kOfxImageFieldUpper) ? 0.5 : 1.0;
-    auto sourceAlpha = stringProperty(input.properties(), kOfxImageEffectPropPreMultiplication);
-    if (!sourceAlpha) {
-        sourceAlpha = stringProperty(sourceClipProperties, kOfxImageEffectPropPreMultiplication);
-    }
-    const bool straightAlpha = inputFormat.components == 4 && is(sourceAlpha, kOfxImageUnPreMultiplied);
     const double pixelAspect = par * scaleY * fieldScale / scaleX;
+    const auto outputAlpha = premultiplication(outputProperties, outputClipProperties);
 
-    auto outputAlpha = stringProperty(outputProperties, kOfxImageEffectPropPreMultiplication);
-    if (!outputAlpha) {
-        outputAlpha = stringProperty(outputClipProperties, kOfxImageEffectPropPreMultiplication);
+    if (isTransition(kind)) {
+        const auto set = parameters(effect);
+        const double progress = transitionProgress(set, time);
+        OfxPropertySetHandle fromProperties = nullptr;
+        OfxPropertySetHandle toProperties = nullptr;
+        const Image from(progress < 1.0 ? clip(effect, sourceFromName, &fromProperties) : nullptr, time, false);
+        const Image to(progress > 0.0 ? clip(effect, sourceToName, &toProperties) : nullptr, time, false);
+        const auto outgoing = inputFrame(from, fromProperties, format);
+        const auto incoming = inputFrame(to, toProperties, format);
+        const bool matchingStraight = (progress >= 1.0 || outgoing.format.straightAlpha)
+            && (progress <= 0.0 || incoming.format.straightAlpha);
+        format.straightAlpha = format.components == 4
+            && (outputAlpha ? is(outputAlpha, kOfxImageUnPreMultiplied) : matchingStraight);
+        const auto settings = diamond::fx::transitionSettingsAt(kind, {props, params, set}, time);
+        diamond::fx::renderTransitionEffect(diamond::fx::transitionKind(kind), settings, progress, outgoing.view, outgoing.format,
+            incoming.view, incoming.format, destination, format, frame, window, pixelAspect, time, fps, aborted, effect);
+        return kOfxStatOK;
     }
-    const bool outputStraight = format.components == 4
-        && (outputAlpha ? is(outputAlpha, kOfxImageUnPreMultiplied) : straightAlpha);
+
+    OfxPropertySetHandle sourceClipProperties = nullptr;
+    const Image input(clip(effect, sourceName, &sourceClipProperties), time, false);
+    const auto source = inputFrame(input, sourceClipProperties, format);
+    format.straightAlpha = format.components == 4
+        && (outputAlpha ? is(outputAlpha, kOfxImageUnPreMultiplied) : source.format.straightAlpha);
     if (kind == Kind::Shake) {
         const auto shake = settingsAt(effect, time);
-        if (inputFormat.depth == format.depth && inputFormat.components == format.components
-            && straightAlpha == outputStraight) {
-            diamond::renderShake(source, destination, frame, window, format.depth, format.components,
-                time / fps, 1.0 / fps, pixelAspect, straightAlpha, shake, aborted, effect);
+        if (source.format.depth == format.depth && source.format.components == format.components
+            && source.format.straightAlpha == format.straightAlpha) {
+            diamond::renderShake(source.view, destination, frame, window, format.depth, format.components,
+                time / fps, 1.0 / fps, pixelAspect, format.straightAlpha, shake, aborted, effect);
         } else {
             // Some hosts supply RGB input to an RGBA output, or use a different
             // alpha convention on either side. Filter in premultiplied float.
-            diamond::fx::renderEffect(kind, {}, source,
-                {inputFormat.depth, inputFormat.components, straightAlpha}, destination,
-                {format.depth, format.components, outputStraight}, frame, window, pixelAspect,
-                time, fps, aborted, effect, &shake);
+            diamond::fx::renderEffect(kind, {}, source.view, source.format, destination, format,
+                frame, window, pixelAspect, time, fps, aborted, effect, &shake);
         }
         return kOfxStatOK;
     }
 
-    diamond::fx::renderEffect(kind, {props, params, parameters(effect)}, source,
-        {inputFormat.depth, inputFormat.components, straightAlpha}, destination,
-        {format.depth, format.components, outputStraight}, frame, window, pixelAspect,
-        time, fps, aborted, effect);
+    diamond::fx::renderEffect(kind, {props, params, parameters(effect)}, source.view, source.format,
+        destination, format, frame, window, pixelAspect, time, fps, aborted, effect);
     return kOfxStatOK;
 }
 
@@ -530,6 +612,9 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
             return load();
         }
         if (is(action, kOfxActionUnload)) {
+            if constexpr (kind == Kind::Rays || kind == Kind::BlurMoCurves) {
+                diamond::fx::releaseGpu05();
+            }
             // The same binary and suites may still be used by another Diamond effect.
             return kOfxStatOK;
         }
@@ -545,6 +630,9 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         } else if (is(action, kOfxActionCreateInstance) || is(action, kOfxActionDestroyInstance)) {
             return kOfxStatOK;
         } else if (is(action, kOfxImageEffectActionGetClipPreferences)) {
+            if constexpr (isTransition(kind)) {
+                return kOfxStatReplyDefault;
+            }
             clipPreferences(effect, outArgs, kind);
         } else if (is(action, kOfxImageEffectActionIsIdentity)) {
             if constexpr (kind == Kind::Shake || kind >= Kind::UltraZap) {
@@ -552,7 +640,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
             }
             return kOfxStatReplyDefault;
         } else if (is(action, kOfxImageEffectActionGetRegionsOfInterest)) {
-            return regionsOfInterest(effect, inArgs, outArgs);
+            return regionsOfInterest(effect, inArgs, outArgs, kind);
         } else if (is(action, kOfxImageEffectActionRender)) {
             return render(effect, inArgs, kind);
         } else {
@@ -589,7 +677,17 @@ OfxPlugin plugins[] = {
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglint", 0, 4, setHost, mainEntry<Kind::Glint>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dstreaks", 0, 4, setHost, mainEntry<Kind::Streaks>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dhalftone", 0, 4, setHost, mainEntry<Kind::HalfTone>},
-    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dbleachbypass", 0, 4, setHost, mainEntry<Kind::BleachBypass>}
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dbleachbypass", 0, 4, setHost, mainEntry<Kind::BleachBypass>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dblur", 0, 5, setHost, mainEntry<Kind::Blur>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dblurdirectional", 0, 5, setHost, mainEntry<Kind::BlurDirectional>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dsharpen", 0, 5, setHost, mainEntry<Kind::Sharpen>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dvignette", 0, 5, setHost, mainEntry<Kind::Vignette>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dgrain", 0, 5, setHost, mainEntry<Kind::Grain>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dhalation", 0, 5, setHost, mainEntry<Kind::Halation>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolve", 0, 5, setHost, mainEntry<Kind::Dissolve>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolveglow", 0, 5, setHost, mainEntry<Kind::DissolveGlow>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolveshake", 0, 5, setHost, mainEntry<Kind::DissolveShake>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dswishpan", 0, 5, setHost, mainEntry<Kind::SwishPan>}
 };
 
 constexpr int pluginCount = static_cast<int>(sizeof(plugins) / sizeof(plugins[0]));

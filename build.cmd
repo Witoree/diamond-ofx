@@ -30,6 +30,7 @@ cl.exe /nologo /std:c++17 /permissive- /W4 /utf-8 /EHsc /O2 /MT /LD ^
     "%diamondRoot%src\BlurMoCurves.cpp" "%diamondRoot%src\Atmosphere.cpp" ^
     "%diamondRoot%src\FilmAndSort.cpp" "%diamondRoot%src\RackDefocus.cpp" ^
     "%diamondRoot%src\NewOptics.cpp" "%diamondRoot%src\NewWarp.cpp" "%diamondRoot%src\NewStylize.cpp" ^
+    "%diamondRoot%src\Video05.cpp" "%diamondRoot%src\Transitions05.cpp" "%diamondRoot%src\Gpu05.cpp" ^
     /Fe:"%diamondBinDir%\Diamond.ofx" /link /MACHINE:X64 /INCREMENTAL:NO /IMPLIB:"Diamond.lib"
 set "diamondBuildStatus=%ERRORLEVEL%"
 popd

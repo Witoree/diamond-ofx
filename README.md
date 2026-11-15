@@ -4,12 +4,16 @@
 
 Personal project. vibe coded this with AI because I wanted camera shake for my VEGAS edits and not spend 80 USD on a certain plugin.
 
-**[Download v0.04](https://github.com/Witoree/diamond-ofx/releases/tag/v0.04)** for Windows x64. Close VEGAS and copy `Diamond.ofx.bundle` from the Win64 ZIP to `C:\Program Files\Common Files\OFX\Plugins\`. Reopen VEGAS and look under **Video FX → Diamond**. [All releases](https://github.com/Witoree/diamond-ofx/releases) · [Install guide](docs/INSTALL.md)
+**[Download v0.05](https://github.com/Witoree/diamond-ofx/releases/tag/v0.05)** for Windows x64. Close VEGAS and copy `Diamond.ofx.bundle` from the Win64 ZIP to `C:\Program Files\Common Files\OFX\Plugins\`. Reopen VEGAS and look under **Video FX → Diamond** or **Transitions → Diamond**. [All releases](https://github.com/Witoree/diamond-ofx/releases) · [Install guide](docs/INSTALL.md)
 
-The effects render on the CPU.
+`D_Rays` and `D_BlurMoCurves` use OpenCL GPU acceleration with automatic CPU fallback.
 
 ## Effects
 
-`D_Shake`, `D_LensFlare`, `D_Glow`, `D_BlurMoCurves`, `D_DigitalDamage`, `D_Rays`, `D_UltraZap`, `D_PixelSort`, `D_RackDefocus`, `D_LightLeak`, `D_FilmEffect`, `D_VHSDamage`, `D_FilmBurn`, `D_DistortRGB`, `D_WarpFishEye`, `D_WarpWaves`, `D_Glare`, `D_Glint`, `D_Streaks`, `D_HalfTone`, and `D_BleachBypass`.
+`D_Shake`, `D_LensFlare`, `D_Glow`, `D_BlurMoCurves`, `D_DigitalDamage`, `D_Rays`, `D_UltraZap`, `D_PixelSort`, `D_RackDefocus`, `D_LightLeak`, `D_FilmEffect`, `D_VHSDamage`, `D_FilmBurn`, `D_DistortRGB`, `D_WarpFishEye`, `D_WarpWaves`, `D_Glare`, `D_Glint`, `D_Streaks`, `D_HalfTone`, `D_BleachBypass`, `D_Blur`, `D_BlurDirectional`, `D_Sharpen`, `D_Vignette`, `D_Grain`, and `D_Halation`.
+
+## Transitions
+
+`D_Dissolve`, `D_DissolveGlow`, `D_DissolveShake`, and `D_SwishPan`.
 
 [Changelog](CHANGELOG.md) · [Build](docs/BUILD.md) · [Contribute](CONTRIBUTING.md) · [MIT license](LICENSE.txt) · [OpenFX license](third_party/openfx/LICENSE.md)

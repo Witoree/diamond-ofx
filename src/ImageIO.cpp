@@ -49,6 +49,14 @@ void validateView(Rect bounds, std::ptrdiff_t rowBytes, PixelFormat format) {
     }
 }
 
+Rect checkedSourceBounds(ImageView source, PixelFormat format) {
+    if (!source.data || empty(source.bounds)) {
+        return {};
+    }
+    validateView(source.bounds, source.rowBytes, format);
+    return source.bounds;
+}
+
 template <typename Sample>
 float loadComponent(const std::byte* data, int channel) {
     Sample sample;
@@ -151,6 +159,28 @@ void encode(MutableImageView destination, PixelFormat format, const Context& con
     }
 }
 
+void decodeImage(ImageView source, PixelFormat format, Image& decoded, const Context& context) {
+    if (empty(decoded.bounds)) {
+        return;
+    }
+    switch (format.depth) {
+        case Depth::Byte: decode<std::uint8_t>(source, format, decoded, context); break;
+        case Depth::Short: decode<std::uint16_t>(source, format, decoded, context); break;
+        case Depth::Float: decode<float>(source, format, decoded, context); break;
+    }
+}
+
+void encodeImage(MutableImageView destination, PixelFormat format, const Context& context) {
+    if (context.cancelled()) {
+        return;
+    }
+    switch (format.depth) {
+        case Depth::Byte: encode<std::uint8_t>(destination, format, context); break;
+        case Depth::Short: encode<std::uint16_t>(destination, format, context); break;
+        case Depth::Float: encode<float>(destination, format, context); break;
+    }
+}
+
 } // namespace
 
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
@@ -162,21 +192,10 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
         return;
     }
     validateView(destination.bounds, destination.rowBytes, outputFormat);
-    const bool hasSource = source.data && !empty(source.bounds);
-    if (hasSource) {
-        validateView(source.bounds, source.rowBytes, inputFormat);
-    }
-
-    Image decoded(hasSource ? source.bounds : Rect{});
+    Image decoded(checkedSourceBounds(source, inputFormat));
     Image output(window);
     const Context context{decoded, output, frame, pixelAspect, timeFrames, fps, abort, abortContext};
-    if (hasSource) {
-        switch (inputFormat.depth) {
-            case Depth::Byte: decode<std::uint8_t>(source, inputFormat, decoded, context); break;
-            case Depth::Short: decode<std::uint16_t>(source, inputFormat, decoded, context); break;
-            case Depth::Float: decode<float>(source, inputFormat, decoded, context); break;
-        }
-    }
+    decodeImage(source, inputFormat, decoded, context);
     if (context.cancelled()) {
         return;
     }
@@ -194,14 +213,34 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
     } else {
         renderConfiguredEffect(kind, parameters, context);
     }
+    encodeImage(destination, outputFormat, context);
+}
+
+void renderTransitionEffect(TransitionKind kind, const TransitionSettings& settings, double progress,
+                            ImageView from, PixelFormat fromFormat, ImageView to, PixelFormat toFormat,
+                            MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
+                            double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
+                            void* abortContext) {
+    window = intersect(window, destination.bounds);
+    if (!destination.data || empty(window) || (abort && abort(abortContext))) {
+        return;
+    }
+    validateView(destination.bounds, destination.rowBytes, outputFormat);
+    progress = std::isfinite(progress) ? std::clamp(progress, 0.0, 1.0) : 0.0;
+    Image outgoing(progress < 1.0 ? checkedSourceBounds(from, fromFormat) : Rect{});
+    Image output(window);
+    const Context context{outgoing, output, frame, pixelAspect, timeFrames, fps, abort, abortContext};
+    decodeImage(from, fromFormat, outgoing, context);
     if (context.cancelled()) {
         return;
     }
-    switch (outputFormat.depth) {
-        case Depth::Byte: encode<std::uint8_t>(destination, outputFormat, context); break;
-        case Depth::Short: encode<std::uint16_t>(destination, outputFormat, context); break;
-        case Depth::Float: encode<float>(destination, outputFormat, context); break;
+    Image incoming(progress > 0.0 ? checkedSourceBounds(to, toFormat) : Rect{});
+    decodeImage(to, toFormat, incoming, context);
+    if (context.cancelled()) {
+        return;
     }
+    renderTransition(kind, context, incoming, progress, settings);
+    encodeImage(destination, outputFormat, context);
 }
 
 } // namespace diamond::fx

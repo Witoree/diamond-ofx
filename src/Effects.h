@@ -26,6 +26,7 @@ public:
 
     Pixel& pixel(int x, int y) { return pixels_[index(x, y)]; }
     Pixel* data() { return pixels_.data(); }
+    const Pixel* data() const { return pixels_.data(); }
 
     Pixel read(int x, int y) const
     {
