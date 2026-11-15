@@ -33,7 +33,17 @@ constexpr EffectDescription descriptions[] = {
     {"D_PixelSort", "Sort selected runs of pixels along an adjustable angle.", false},
     {"D_RackDefocus", "Defocus through an adjustable iris with bright optical bokeh.", false},
     {"D_LightLeak", "Add a drifting film light leak with selectable color and composition.", true},
-    {"D_FilmEffect", "Apply a film print look with tone shaping, grain, halation and vignette.", true}
+    {"D_FilmEffect", "Apply a film print look with tone shaping, grain, halation and vignette.", true},
+    {"D_VHSDamage", "Simulate analog tape tracking, chroma bleed, scanlines and dropouts.", true},
+    {"D_FilmBurn", "Create an animated film burn with a soft exposure front and hot spots.", true},
+    {"D_DistortRGB", "Separate and warp color channels using detail in the source image.", false},
+    {"D_WarpFishEye", "Bend the image around a movable center with fisheye distortion.", false},
+    {"D_WarpWaves", "Displace the image with animated directional waves.", true},
+    {"D_Glare", "Spread bright regions into broad, diffracted star patterns.", false},
+    {"D_Glint", "Draw crisp star points around small bright details.", false},
+    {"D_Streaks", "Stretch bright regions into directional light streaks.", false},
+    {"D_HalfTone", "Turn footage into a screened print with mono, RGB or CMYK dots.", false},
+    {"D_BleachBypass", "Apply a silver-retention look with controlled color and contrast.", false}
 };
 
 const EffectDescription& description(Kind kind)
@@ -168,6 +178,29 @@ void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, 
     // Opaque input can produce transparency at uncovered frame edges.
     props->propSetString(outArgs, kOfxImageEffectPropPreMultiplication, 0,
         straightAlpha ? kOfxImageUnPreMultiplied : kOfxImagePreMultiplied);
+
+    // In General, compositing hosts can supply an RGBA output for isolated
+    // light and transparent warp edges, even when the source is RGB.
+    const bool canCreateAlpha = kind == Kind::FilmBurn || kind == Kind::Glare
+        || kind == Kind::Glint || kind == Kind::Streaks || kind == Kind::DistortRGB
+        || kind == Kind::WarpFishEye || kind == Kind::WarpWaves;
+    if (canCreateAlpha && is(stringProperty(effectProperties(effect), kOfxImageEffectPropContext),
+                             kOfxImageEffectContextGeneral)) {
+        const auto* current = host.load();
+        int count = 0;
+        if (current && props->propGetDimension(current->host,
+                kOfxImageEffectPropSupportedComponents, &count) == kOfxStatOK) {
+            for (int index = 0; index < count; ++index) {
+                char* component = nullptr;
+                if (props->propGetString(current->host, kOfxImageEffectPropSupportedComponents,
+                        index, &component) == kOfxStatOK && is(component, kOfxImageComponentRGBA)) {
+                    props->propSetString(outArgs, "OfxImageClipPropComponents_Output", 0,
+                                         kOfxImageComponentRGBA);
+                    break;
+                }
+            }
+        }
+    }
 }
 
 void describe(OfxImageEffectHandle effect, Kind kind)
@@ -439,10 +472,6 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     auto inputFormat = format;
     if (const auto inputProperties = input.properties()) {
         inputFormat = pixelFormat(inputProperties);
-        if (kind == Kind::Shake
-            && (inputFormat.depth != format.depth || inputFormat.components != format.components)) {
-            return kOfxStatErrFormat;
-        }
         const auto view = imageView(inputProperties);
         source = {view.data, view.rowBytes, view.bounds};
     }
@@ -462,18 +491,29 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     const bool straightAlpha = inputFormat.components == 4 && is(sourceAlpha, kOfxImageUnPreMultiplied);
     const double pixelAspect = par * scaleY * fieldScale / scaleX;
 
-    if (kind == Kind::Shake) {
-        diamond::renderShake(source, destination, frame, window, format.depth, format.components,
-            time / fps, 1.0 / fps, pixelAspect, straightAlpha, settingsAt(effect, time), aborted, effect);
-        return kOfxStatOK;
-    }
-
     auto outputAlpha = stringProperty(outputProperties, kOfxImageEffectPropPreMultiplication);
     if (!outputAlpha) {
         outputAlpha = stringProperty(outputClipProperties, kOfxImageEffectPropPreMultiplication);
     }
     const bool outputStraight = format.components == 4
         && (outputAlpha ? is(outputAlpha, kOfxImageUnPreMultiplied) : straightAlpha);
+    if (kind == Kind::Shake) {
+        const auto shake = settingsAt(effect, time);
+        if (inputFormat.depth == format.depth && inputFormat.components == format.components
+            && straightAlpha == outputStraight) {
+            diamond::renderShake(source, destination, frame, window, format.depth, format.components,
+                time / fps, 1.0 / fps, pixelAspect, straightAlpha, shake, aborted, effect);
+        } else {
+            // Some hosts supply RGB input to an RGBA output, or use a different
+            // alpha convention on either side. Filter in premultiplied float.
+            diamond::fx::renderEffect(kind, {}, source,
+                {inputFormat.depth, inputFormat.components, straightAlpha}, destination,
+                {format.depth, format.components, outputStraight}, frame, window, pixelAspect,
+                time, fps, aborted, effect, &shake);
+        }
+        return kOfxStatOK;
+    }
+
     diamond::fx::renderEffect(kind, {props, params, parameters(effect)}, source,
         {inputFormat.depth, inputFormat.components, straightAlpha}, destination,
         {format.depth, format.components, outputStraight}, frame, window, pixelAspect,
@@ -539,7 +579,17 @@ OfxPlugin plugins[] = {
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dpixelsort", 0, 3, setHost, mainEntry<Kind::PixelSort>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.drackdefocus", 0, 3, setHost, mainEntry<Kind::RackDefocus>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dlightleak", 0, 3, setHost, mainEntry<Kind::LightLeak>},
-    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dfilmeffect", 0, 3, setHost, mainEntry<Kind::FilmEffect>}
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dfilmeffect", 0, 3, setHost, mainEntry<Kind::FilmEffect>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dvhsdamage", 0, 4, setHost, mainEntry<Kind::VHSDamage>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dfilmburn", 0, 4, setHost, mainEntry<Kind::FilmBurn>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddistortrgb", 0, 4, setHost, mainEntry<Kind::DistortRGB>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dwarpfisheye", 0, 4, setHost, mainEntry<Kind::WarpFishEye>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dwarpwaves", 0, 4, setHost, mainEntry<Kind::WarpWaves>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglare", 0, 4, setHost, mainEntry<Kind::Glare>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglint", 0, 4, setHost, mainEntry<Kind::Glint>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dstreaks", 0, 4, setHost, mainEntry<Kind::Streaks>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dhalftone", 0, 4, setHost, mainEntry<Kind::HalfTone>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dbleachbypass", 0, 4, setHost, mainEntry<Kind::BleachBypass>}
 };
 
 constexpr int pluginCount = static_cast<int>(sizeof(plugins) / sizeof(plugins[0]));

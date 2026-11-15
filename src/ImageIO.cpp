@@ -1,6 +1,7 @@
 #include "EffectsHost.h"
 
 #include <cstdint>
+#include <cstddef>
 #include <cstring>
 #include <limits>
 #include <type_traits>
@@ -155,7 +156,7 @@ void encode(MutableImageView destination, PixelFormat format, const Context& con
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
-                  void* abortContext) {
+                  void* abortContext, const ShakeSettings* shake) {
     window = intersect(window, destination.bounds);
     if (!destination.data || empty(window) || (abort && abort(abortContext))) {
         return;
@@ -180,7 +181,19 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
         return;
     }
 
-    renderConfiguredEffect(kind, parameters, context);
+    if (shake) {
+        static_assert(std::is_standard_layout_v<Pixel> && sizeof(Pixel) == 4 * sizeof(float)
+            && offsetof(Pixel, g) == sizeof(float) && offsetof(Pixel, b) == 2 * sizeof(float)
+            && offsetof(Pixel, a) == 3 * sizeof(float));
+        const auto stride = [](Rect area) {
+            return static_cast<std::ptrdiff_t>(width(area)) * static_cast<std::ptrdiff_t>(sizeof(Pixel));
+        };
+        diamond::renderShake({decoded.data(), stride(decoded.bounds), decoded.bounds},
+            {output.data(), stride(output.bounds), output.bounds}, frame, window, Depth::Float, 4,
+            timeFrames / fps, 1.0 / fps, pixelAspect, false, *shake, abort, abortContext);
+    } else {
+        renderConfiguredEffect(kind, parameters, context);
+    }
     if (context.cancelled()) {
         return;
     }

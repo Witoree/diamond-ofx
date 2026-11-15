@@ -9,7 +9,9 @@ namespace diamond::fx {
 
 enum class Kind {
     Shake, LensFlare, Glow, BlurMoCurves, DigitalDamage, Rays,
-    UltraZap, PixelSort, RackDefocus, LightLeak, FilmEffect
+    UltraZap, PixelSort, RackDefocus, LightLeak, FilmEffect,
+    VHSDamage, FilmBurn, DistortRGB, WarpFishEye, WarpWaves,
+    Glare, Glint, Streaks, HalfTone, BleachBypass
 };
 
 struct StatusError {
@@ -33,6 +35,6 @@ bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time);
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
-                  void* abortContext);
+                  void* abortContext, const ShakeSettings* shake = nullptr);
 
 } // namespace diamond::fx

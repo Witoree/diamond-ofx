@@ -25,6 +25,7 @@ public:
         pixels_(static_cast<std::size_t>(stride_) * height(area)) {}
 
     Pixel& pixel(int x, int y) { return pixels_[index(x, y)]; }
+    Pixel* data() { return pixels_.data(); }
 
     Pixel read(int x, int y) const
     {

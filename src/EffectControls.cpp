@@ -1,4 +1,7 @@
 #include "EffectsHost.h"
+#include "NewOptics.h"
+#include "NewStylize.h"
+#include "NewWarp.h"
 
 #include <initializer_list>
 #include <limits>
@@ -139,6 +142,102 @@ constexpr Number<FilmSettings> filmNumbers[] = {
     {"mix", "Mix", &FilmSettings::mix, 1, 0, 1, .01}
 };
 
+constexpr Number<VHSSettings> vhsNumbers[] = {
+    {"amount", "Amount", &VHSSettings::amount, 0.75, 0, 1, 0.01},
+    {"frequency", "Update rate (Hz)", &VHSSettings::frequency, 24, 0, 60, 1},
+    {"tracking", "Tracking distortion", &VHSSettings::tracking, 0.35, 0, 1, 0.01},
+    {"jitter", "Horizontal jitter", &VHSSettings::jitter, 0.2, 0, 1, 0.01},
+    {"chromaBleed", "Chroma bleed", &VHSSettings::chromaBleed, 0.45, 0, 1, 0.01},
+    {"scanlines", "Scanlines", &VHSSettings::scanlines, 0.28, 0, 1, 0.01},
+    {"noise", "Tape noise", &VHSSettings::noise, 0.22, 0, 1, 0.01},
+    {"dropout", "Dropouts", &VHSSettings::dropout, 0.15, 0, 1, 0.01}
+};
+
+constexpr Number<FilmBurnSettings> burnNumbers[] = {
+    {"centerX", "Center X", &FilmBurnSettings::centerX, 0.12, -1, 2, 0.01},
+    {"centerY", "Center Y", &FilmBurnSettings::centerY, 0.42, -1, 2, 0.01},
+    {"amount", "Exposure strength", &FilmBurnSettings::amount, 0.8, 0, 4, 0.05},
+    {"size", "Burn size", &FilmBurnSettings::size, 1, 0.05, 4, 0.05},
+    {"softness", "Edge softness", &FilmBurnSettings::softness, 0.55, 0, 1, 0.01},
+    {"angle", "Angle (degrees)", &FilmBurnSettings::angle, 13, -360, 360, 1},
+    {"speed", "Drift speed (Hz)", &FilmBurnSettings::speed, 0.7, 0, 8, 0.05}
+};
+
+constexpr Number<DistortRGBSettings> distortRgbNumbers[] = {
+    {"amount", "Displacement (% of height)", &DistortRGBSettings::amount, 2.5, -25, 25, 0.05},
+    {"detail", "Detail radius (% of height)", &DistortRGBSettings::detail, 0.65, 0.05, 5, 0.05},
+    {"direction", "Direction (degrees)", &DistortRGBSettings::direction, 0, -360, 360, 1},
+    {"red", "Red displacement", &DistortRGBSettings::red, 1, -3, 3, 0.05},
+    {"green", "Green displacement", &DistortRGBSettings::green, 0.35, -3, 3, 0.05},
+    {"blue", "Blue displacement", &DistortRGBSettings::blue, -0.8, -3, 3, 0.05},
+    {"mix", "Mix", &DistortRGBSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<WarpFishEyeSettings> fishEyeNumbers[] = {
+    {"amount", "Curvature", &WarpFishEyeSettings::amount, 0.6, -2, 2, 0.02},
+    {"centerX", "Center X", &WarpFishEyeSettings::centerX, 0.5, -1, 2, 0.01},
+    {"centerY", "Center Y", &WarpFishEyeSettings::centerY, 0.5, -1, 2, 0.01},
+    {"zoom", "Zoom", &WarpFishEyeSettings::zoom, 1, 0.25, 4, 0.01},
+    {"mix", "Mix", &WarpFishEyeSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<WarpWavesSettings> wavesNumbers[] = {
+    {"amplitude", "Amplitude (% of height)", &WarpWavesSettings::amplitude, 2, 0, 25, 0.05},
+    {"frequency", "Cycles per frame height", &WarpWavesSettings::frequency, 4, 0.1, 64, 0.1},
+    {"direction", "Travel angle (degrees)", &WarpWavesSettings::direction, 90, -360, 360, 1},
+    {"phase", "Phase (degrees)", &WarpWavesSettings::phase, 0, -360, 360, 1},
+    {"speed", "Speed (cycles/sec)", &WarpWavesSettings::speed, 0.5, -12, 12, 0.05},
+    {"crossWave", "Cross wave", &WarpWavesSettings::crossWave, 0.25, 0, 1, 0.01},
+    {"mix", "Mix", &WarpWavesSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<GlareSettings> glareNumbers[] = {
+    {"threshold", "Threshold", &GlareSettings::threshold, 0.7, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlareSettings::knee, 0.2, 0, 2, 0.01},
+    {"radius", "Radius (% of height)", &GlareSettings::radius, 9, 0, 30, 0.1},
+    {"intensity", "Intensity", &GlareSettings::intensity, 0.9, 0, 8, 0.05},
+    {"dispersion", "Dispersion", &GlareSettings::dispersion, 0.3, 0, 1, 0.01},
+    {"rotation", "Rotation (degrees)", &GlareSettings::rotation, 10, -360, 360, 1}
+};
+
+constexpr Number<GlintSettings> glintNumbers[] = {
+    {"threshold", "Threshold", &GlintSettings::threshold, 0.78, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlintSettings::knee, 0.2, 0, 2, 0.01},
+    {"length", "Length (% of height)", &GlintSettings::length, 4.5, 0, 25, 0.1},
+    {"intensity", "Intensity", &GlintSettings::intensity, 0.9, 0, 8, 0.05},
+    {"angle", "Angle (degrees)", &GlintSettings::angle, 24, -360, 360, 1},
+    {"dispersion", "Dispersion", &GlintSettings::dispersion, 0.3, 0, 1, 0.01}
+};
+
+constexpr Number<StreaksSettings> streaksNumbers[] = {
+    {"threshold", "Threshold", &StreaksSettings::threshold, 0.68, 0, 4, 0.01},
+    {"knee", "Soft knee", &StreaksSettings::knee, 0.2, 0, 2, 0.01},
+    {"length", "Length (% of height)", &StreaksSettings::length, 18, 0, 50, 0.1},
+    {"intensity", "Intensity", &StreaksSettings::intensity, 0.9, 0, 8, 0.05},
+    {"angle", "Angle (degrees)", &StreaksSettings::angle, 0, -360, 360, 1},
+    {"spread", "Angular spread", &StreaksSettings::spread, 0.2, 0, 1, 0.01}
+};
+
+constexpr Number<HalfToneSettings> halfToneNumbers[] = {
+    {"cellSize", "Cell size (px at 1080p)", &HalfToneSettings::cellSize, 9, 2, 120, 0.5},
+    {"angle", "Screen angle (degrees)", &HalfToneSettings::angle, 22.5, -360, 360, 1},
+    {"softness", "Dot softness", &HalfToneSettings::softness, 0.2, 0, 1, 0.01},
+    {"threshold", "Midpoint", &HalfToneSettings::threshold, 0.5, 0, 1, 0.01},
+    {"contrast", "Contrast", &HalfToneSettings::contrast, 1, 0.2, 4, 0.05},
+    {"mix", "Mix", &HalfToneSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<BleachBypassSettings> bleachNumbers[] = {
+    {"amount", "Amount", &BleachBypassSettings::amount, 0.8, 0, 1, 0.01},
+    {"desaturation", "Desaturation", &BleachBypassSettings::desaturation, 0.65, 0, 1, 0.01},
+    {"contrast", "Contrast", &BleachBypassSettings::contrast, 1.3, 0.25, 3, 0.05},
+    {"exposure", "Exposure (stops)", &BleachBypassSettings::exposure, 0, -5, 5, 0.05},
+    {"shadowLift", "Shadow lift", &BleachBypassSettings::shadowLift, 0, -0.25, 0.25, 0.01},
+    {"highlightRolloff", "Highlight roll-off", &BleachBypassSettings::highlightRolloff, 0.25, 0, 1, 0.01},
+    {"temperature", "Temperature", &BleachBypassSettings::temperature, -0.08, -1, 1, 0.01},
+    {"mix", "Mix", &BleachBypassSettings::mix, 1, 0, 1, 0.01}
+};
+
 class Controls {
 public:
     explicit Controls(Parameters parameters) : params_(parameters) {}
@@ -190,9 +289,14 @@ public:
 
     void tint(double red, double green, double blue) const
     {
-        const auto prop = define(kOfxParamTypeRGB, "tint", "Tint");
-        const double color[] = {red, green, blue};
-        require(params_.properties->propSetDoubleN(prop, kOfxParamPropDefault, 3, color));
+        color("tint", "Tint", red, green, blue);
+    }
+
+    void color(const char* name, const char* label, double red, double green, double blue) const
+    {
+        const auto prop = define(kOfxParamTypeRGB, name, label);
+        const double components[] = {red, green, blue};
+        require(params_.properties->propSetDoubleN(prop, kOfxParamPropDefault, 3, components));
     }
 
     template<typename Settings, std::size_t Count>
@@ -232,14 +336,18 @@ public:
     template<typename Settings>
     void readTint(Settings& settings, OfxTime time) const
     {
-        require(params_.suite->paramGetValueAtTime(get("tint"), time, &settings.red,
-                                                   &settings.green, &settings.blue));
+        readColor("tint", time, settings.red, settings.green, settings.blue);
+    }
+
+    void readColor(const char* name, OfxTime time, double& red, double& green, double& blue) const
+    {
+        require(params_.suite->paramGetValueAtTime(get(name), time, &red, &green, &blue));
         const auto component = [](double value) {
             return std::isfinite(value) ? std::clamp(value, 0.0, 1.0) : 1.0;
         };
-        settings.red = component(settings.red);
-        settings.green = component(settings.green);
-        settings.blue = component(settings.blue);
+        red = component(red);
+        green = component(green);
+        blue = component(blue);
     }
 
 private:
@@ -337,6 +445,61 @@ void describeControls(Kind kind, Parameters parameters)
         controls.numbers(filmNumbers);
         controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
         break;
+    case Kind::VHSDamage:
+        controls.numbers(vhsNumbers);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
+        break;
+    case Kind::FilmBurn:
+        controls.numbers(burnNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
+        controls.choice("style", "Film stock", 0, {"Amber", "Crimson", "Bleach"});
+        controls.checkbox("burnOnly", "Burn only");
+        break;
+    case Kind::DistortRGB:
+        controls.numbers(distortRgbNumbers);
+        controls.choice("edges", "Edges", 0, {"Reflect", "Clamp", "Transparent"});
+        break;
+    case Kind::WarpFishEye:
+        controls.numbers(fishEyeNumbers);
+        controls.choice("edges", "Edges", 0, {"Reflect", "Clamp", "Transparent"});
+        break;
+    case Kind::WarpWaves:
+        controls.numbers(wavesNumbers);
+        controls.choice("edges", "Edges", 0, {"Reflect", "Clamp", "Transparent"});
+        break;
+    case Kind::Glare:
+        controls.numbers(glareNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("blades", "Blades", 6, 2, 12, 12);
+        controls.checkbox("glareOnly", "Glare only");
+        break;
+    case Kind::Glint:
+        controls.numbers(glintNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("rays", "Rays", 4, 2, 12, 12);
+        controls.checkbox("glintOnly", "Glint only");
+        break;
+    case Kind::Streaks:
+        controls.numbers(streaksNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("count", "Streak count", 2, 1, 8, 8);
+        controls.checkbox("streaksOnly", "Streaks only");
+        break;
+    case Kind::HalfTone:
+        controls.numbers(halfToneNumbers);
+        controls.choice("mode", "Color mode", 0, {"Mono ink", "RGB", "CMYK"});
+        controls.color("ink", "Ink color", 0, 0, 0);
+        controls.color("paper", "Paper color", 1, 1, 1);
+        controls.checkbox("invert", "Invert");
+        break;
+    case Kind::BleachBypass:
+        controls.numbers(bleachNumbers);
+        break;
     case Kind::Shake:
         break;
     }
@@ -354,7 +517,22 @@ bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time)
         return controls.readDouble("radius", time) <= 0 || controls.readDouble("mix", time) <= 0;
     case Kind::PixelSort:
     case Kind::FilmEffect:
+    case Kind::DistortRGB:
+    case Kind::WarpFishEye:
+    case Kind::WarpWaves:
+    case Kind::HalfTone:
+    case Kind::BleachBypass:
         return controls.readDouble("mix", time) <= 0;
+    case Kind::VHSDamage:
+        return controls.readDouble("amount", time) <= 0;
+    case Kind::FilmBurn:
+        return controls.readDouble("amount", time) <= 0 && controls.readInt("burnOnly", time) == 0;
+    case Kind::Glare:
+        return controls.readDouble("intensity", time) <= 0 && controls.readInt("glareOnly", time) == 0;
+    case Kind::Glint:
+        return controls.readDouble("intensity", time) <= 0 && controls.readInt("glintOnly", time) == 0;
+    case Kind::Streaks:
+        return controls.readDouble("intensity", time) <= 0 && controls.readInt("streaksOnly", time) == 0;
     default:
         return false;
     }
@@ -457,6 +635,91 @@ void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& con
         settings.profile = std::clamp(controls.readInt("profile", time), 0, 3);
         settings.seed = controls.readInt("seed", time);
         renderFilmEffect(context, settings);
+        break;
+    }
+    case Kind::VHSDamage: {
+        VHSSettings settings{};
+        controls.read(settings, vhsNumbers, time);
+        settings.seed = controls.readInt("seed", time);
+        renderVHSDamage(context, settings);
+        break;
+    }
+    case Kind::FilmBurn: {
+        FilmBurnSettings settings{};
+        controls.read(settings, burnNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.seed = controls.readInt("seed", time);
+        settings.style = std::clamp(controls.readInt("style", time), 0, 2);
+        settings.burnOnly = controls.readInt("burnOnly", time) != 0;
+        renderFilmBurn(context, settings);
+        break;
+    }
+    case Kind::DistortRGB: {
+        DistortRGBSettings settings{};
+        controls.read(settings, distortRgbNumbers, time);
+        settings.edge = controls.readEdges(time);
+        renderDistortRGB(context, settings);
+        break;
+    }
+    case Kind::WarpFishEye: {
+        WarpFishEyeSettings settings{};
+        controls.read(settings, fishEyeNumbers, time);
+        settings.edge = controls.readEdges(time);
+        renderWarpFishEye(context, settings);
+        break;
+    }
+    case Kind::WarpWaves: {
+        WarpWavesSettings settings{};
+        controls.read(settings, wavesNumbers, time);
+        settings.edge = controls.readEdges(time);
+        renderWarpWaves(context, settings);
+        break;
+    }
+    case Kind::Glare: {
+        GlareSettings settings{};
+        controls.read(settings, glareNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.blades = std::clamp(controls.readInt("blades", time), 2, 12);
+        settings.glareOnly = controls.readInt("glareOnly", time) != 0;
+        renderGlare(context, settings);
+        break;
+    }
+    case Kind::Glint: {
+        GlintSettings settings{};
+        controls.read(settings, glintNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.rays = std::clamp(controls.readInt("rays", time), 2, 12);
+        settings.glintOnly = controls.readInt("glintOnly", time) != 0;
+        renderGlint(context, settings);
+        break;
+    }
+    case Kind::Streaks: {
+        StreaksSettings settings{};
+        controls.read(settings, streaksNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.count = std::clamp(controls.readInt("count", time), 1, 8);
+        settings.streaksOnly = controls.readInt("streaksOnly", time) != 0;
+        renderStreaks(context, settings);
+        break;
+    }
+    case Kind::HalfTone: {
+        HalfToneSettings settings{};
+        controls.read(settings, halfToneNumbers, time);
+        controls.readColor("ink", time, settings.inkRed, settings.inkGreen, settings.inkBlue);
+        controls.readColor("paper", time, settings.paperRed, settings.paperGreen, settings.paperBlue);
+        settings.mode = std::clamp(controls.readInt("mode", time), 0, 2);
+        settings.invert = controls.readInt("invert", time) != 0;
+        renderHalfTone(context, settings);
+        break;
+    }
+    case Kind::BleachBypass: {
+        BleachBypassSettings settings{};
+        controls.read(settings, bleachNumbers, time);
+        renderBleachBypass(context, settings);
         break;
     }
     case Kind::Shake:
