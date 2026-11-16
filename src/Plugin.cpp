@@ -57,7 +57,17 @@ constexpr EffectDescription descriptions[] = {
     {"D_Dissolve", "A smooth cross dissolve between two clips.", false},
     {"D_DissolveGlow", "Blend two clips through a glowing highlight bloom.", false},
     {"D_DissolveShake", "Blend two clips with a deterministic camera shake.", false},
-    {"D_SwishPan", "Transition between two clips with a directional whip pan.", false}
+    {"D_SwishPan", "Transition between two clips with a directional whip pan.", false},
+    {"D_GlowAura", "Wrap highlights in animated colored contours.", true},
+    {"D_GlowDarks", "Diffuse shadow tones into a tinted smoky halo.", false},
+    {"D_GlowDist", "Build a soft glow at a measured distance from bright edges.", false},
+    {"D_GlowEdges", "Outline image edges with colored bloom.", false},
+    {"D_GlowNoise", "Add animated grain and texture to highlight bloom.", true},
+    {"D_GlowOrthicon", "Darken the neighborhood of highlights with an orthicon halo.", false},
+    {"D_GlowRainbow", "Spread moving spectral bands around highlights.", true},
+    {"D_GlowRings", "Draw concentric glow bands around bright details.", false},
+    {"D_UltraGlow", "Layer a tight bloom with a broad halo and separate RGB widths.", false},
+    {"D_EdgeRays", "Project rays from contrast edges and silhouettes.", false}
 };
 
 const EffectDescription& description(Kind kind)
@@ -200,7 +210,8 @@ void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, 
     const bool canCreateAlpha = kind == Kind::FilmBurn || kind == Kind::Glare
         || kind == Kind::Glint || kind == Kind::Streaks || kind == Kind::DistortRGB
         || kind == Kind::WarpFishEye || kind == Kind::WarpWaves || kind == Kind::Blur
-        || kind == Kind::BlurDirectional || kind == Kind::Halation;
+        || kind == Kind::BlurDirectional || kind == Kind::Halation
+        || (kind >= Kind::GlowAura && kind != Kind::GlowOrthicon);
     if (canCreateAlpha && is(stringProperty(effectProperties(effect), kOfxImageEffectPropContext),
                              kOfxImageEffectContextGeneral)) {
         const auto* current = host.load();
@@ -612,7 +623,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
             return load();
         }
         if (is(action, kOfxActionUnload)) {
-            if constexpr (kind == Kind::Rays || kind == Kind::BlurMoCurves) {
+            if constexpr (kind == Kind::Rays || kind == Kind::BlurMoCurves || kind == Kind::EdgeRays) {
                 diamond::fx::releaseGpu05();
             }
             // The same binary and suites may still be used by another Diamond effect.
@@ -687,7 +698,17 @@ OfxPlugin plugins[] = {
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolve", 0, 5, setHost, mainEntry<Kind::Dissolve>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolveglow", 0, 5, setHost, mainEntry<Kind::DissolveGlow>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddissolveshake", 0, 5, setHost, mainEntry<Kind::DissolveShake>},
-    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dswishpan", 0, 5, setHost, mainEntry<Kind::SwishPan>}
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dswishpan", 0, 5, setHost, mainEntry<Kind::SwishPan>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowaura", 0, 6, setHost, mainEntry<Kind::GlowAura>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowdarks", 0, 6, setHost, mainEntry<Kind::GlowDarks>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowdist", 0, 6, setHost, mainEntry<Kind::GlowDist>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowedges", 0, 6, setHost, mainEntry<Kind::GlowEdges>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglownoise", 0, 6, setHost, mainEntry<Kind::GlowNoise>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dgloworthicon", 0, 6, setHost, mainEntry<Kind::GlowOrthicon>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowrainbow", 0, 6, setHost, mainEntry<Kind::GlowRainbow>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowrings", 0, 6, setHost, mainEntry<Kind::GlowRings>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dultraglow", 0, 6, setHost, mainEntry<Kind::UltraGlow>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dedgerays", 0, 6, setHost, mainEntry<Kind::EdgeRays>}
 };
 
 constexpr int pluginCount = static_cast<int>(sizeof(plugins) / sizeof(plugins[0]));

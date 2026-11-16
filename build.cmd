@@ -24,13 +24,15 @@ pushd "%diamondBuildDir%" || exit /b 1
 cl.exe /nologo /std:c++17 /permissive- /W4 /utf-8 /EHsc /O2 /MT /LD ^
     /DNDEBUG /DNOMINMAX /DWIN32_LEAN_AND_MEAN ^
     /I"%diamondRoot%third_party\openfx\include" ^
-    "%diamondRoot%src\Plugin.cpp" "%diamondRoot%src\Shake.cpp" ^
+    "%diamondRoot%src\Plugin.cpp" "%diamondRoot%src\Shake.cpp" "%diamondRoot%src\Parallel.cpp" ^
     "%diamondRoot%src\EffectControls.cpp" "%diamondRoot%src\ImageIO.cpp" ^
     "%diamondRoot%src\Lighting.cpp" "%diamondRoot%src\Stylize.cpp" ^
     "%diamondRoot%src\BlurMoCurves.cpp" "%diamondRoot%src\Atmosphere.cpp" ^
     "%diamondRoot%src\FilmAndSort.cpp" "%diamondRoot%src\RackDefocus.cpp" ^
     "%diamondRoot%src\NewOptics.cpp" "%diamondRoot%src\NewWarp.cpp" "%diamondRoot%src\NewStylize.cpp" ^
     "%diamondRoot%src\Video05.cpp" "%diamondRoot%src\Transitions05.cpp" "%diamondRoot%src\Gpu05.cpp" ^
+    "%diamondRoot%src\GlowAuraDarksDistEdges.cpp" "%diamondRoot%src\GlowSpectral06.cpp" ^
+    "%diamondRoot%src\UltraGlowEdgeRays.cpp" ^
     /Fe:"%diamondBinDir%\Diamond.ofx" /link /MACHINE:X64 /INCREMENTAL:NO /IMPLIB:"Diamond.lib"
 set "diamondBuildStatus=%ERRORLEVEL%"
 popd

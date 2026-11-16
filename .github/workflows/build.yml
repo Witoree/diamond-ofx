@@ -22,3 +22,9 @@ jobs:
         run: |
           call build.cmd || exit /b 1
           if not exist "build\Diamond.ofx.bundle\Contents\Win64\Diamond.ofx" exit /b 1
+      - name: Run headless OpenFX smoke tests
+        shell: cmd
+        run: |
+          call tests\build.cmd || exit /b 1
+          build\tests\Harness.exe build\Diamond.ofx.bundle\Contents\Win64\Diamond.ofx --size 160x90 --depths float --layouts rgba-premult || exit /b 1
+          build\tests\Harness.exe build\Diamond.ofx.bundle\Contents\Win64\Diamond.ofx --size 160x90 --depths float --layouts rgba-premult --cancel-after 3

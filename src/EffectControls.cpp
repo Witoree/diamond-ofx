@@ -1,7 +1,10 @@
 #include "EffectsHost.h"
+#include "Glow06.h"
+#include "GlowSpectral06.h"
 #include "NewOptics.h"
 #include "NewStylize.h"
 #include "NewWarp.h"
+#include "UltraGlowEdgeRays.h"
 #include "Video05.h"
 
 #include <initializer_list>
@@ -304,6 +307,107 @@ constexpr Number<TransitionSettings> transitionShake[] = {
 constexpr Number<TransitionSettings> transitionSwish[] = {
     {"angle", "Direction (degrees)", &TransitionSettings::angle, 0, -360, 360, 1},
     {"shutter", "Shutter", &TransitionSettings::shutter, .45, 0, 1, .01}
+};
+
+constexpr Number<GlowAuraSettings> glowAuraNumbers[] = {
+    {"threshold", "Threshold", &GlowAuraSettings::threshold, 0.38, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlowAuraSettings::knee, 0.15, 0, 2, 0.01},
+    {"radius", "Radius (% of height)", &GlowAuraSettings::radius, 3.5, 0, 30, 0.1},
+    {"intensity", "Intensity", &GlowAuraSettings::intensity, 0.95, 0, 10, 0.05},
+    {"frequency", "Frequency (cycles)", &GlowAuraSettings::frequency, 4, 0, 16, 0.1},
+    {"phase", "Phase (turns)", &GlowAuraSettings::phase, 0, -1, 1, 0.01},
+    {"phaseSpeed", "Phase speed (turns/sec)", &GlowAuraSettings::phaseSpeed, 0.22, -5, 5, 0.025},
+    {"twist", "Twist (turns)", &GlowAuraSettings::twist, 0.6, -4, 4, 0.05}
+};
+
+constexpr Number<GlowDarksSettings> glowDarksNumbers[] = {
+    {"threshold", "Shadow threshold", &GlowDarksSettings::threshold, 0.42, 0, 2, 0.01},
+    {"knee", "Soft knee", &GlowDarksSettings::knee, 0.14, 0, 1, 0.01},
+    {"radius", "Radius (% of height)", &GlowDarksSettings::radius, 3.5, 0, 30, 0.1},
+    {"intensity", "Intensity", &GlowDarksSettings::intensity, 0.85, 0, 4, 0.05},
+    {"spread", "Wide glow mix", &GlowDarksSettings::spread, 0.4, 0, 1, 0.01}
+};
+
+constexpr Number<GlowDistSettings> glowDistNumbers[] = {
+    {"threshold", "Threshold", &GlowDistSettings::threshold, 0.45, 0, 4, 0.01},
+    {"radius", "Radius (% of height)", &GlowDistSettings::radius, 3.5, 0, 30, 0.1},
+    {"intensity", "Intensity", &GlowDistSettings::intensity, 1.1, 0, 10, 0.05},
+    {"falloff", "Falloff", &GlowDistSettings::falloff, 1.65, 0.25, 4, 0.05},
+    {"redWidth", "Red width", &GlowDistSettings::redWidth, 0.75, 0, 3, 0.05},
+    {"greenWidth", "Green width", &GlowDistSettings::greenWidth, 1, 0, 3, 0.05},
+    {"blueWidth", "Blue width", &GlowDistSettings::blueWidth, 1.25, 0, 3, 0.05},
+    {"alphaWeight", "Alpha influence", &GlowDistSettings::alphaWeight, 0, 0, 1, 0.01}
+};
+
+constexpr Number<GlowEdgesSettings> glowEdgesNumbers[] = {
+    {"threshold", "Edge threshold", &GlowEdgesSettings::threshold, 0.075, 0, 4, 0.005},
+    {"softness", "Edge softness", &GlowEdgesSettings::softness, 0.12, 0, 1, 0.01},
+    {"edgeSize", "Edge size (px at 1080p)", &GlowEdgesSettings::edgeSize, 2, 0.5, 16, 0.25},
+    {"radius", "Radius (% of height)", &GlowEdgesSettings::radius, 2, 0, 30, 0.1},
+    {"intensity", "Intensity", &GlowEdgesSettings::intensity, 1.2, 0, 10, 0.05},
+    {"spread", "Wide glow mix", &GlowEdgesSettings::spread, 0.35, 0, 1, 0.01},
+    {"alphaWeight", "Alpha influence", &GlowEdgesSettings::alphaWeight, 0.35, 0, 1, 0.01}
+};
+
+constexpr Number<GlowNoiseSettings> glowNoiseNumbers[] = {
+    {"threshold", "Highlight threshold", &GlowNoiseSettings::threshold, 0.55, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlowNoiseSettings::knee, 0.15, 0, 1, 0.01},
+    {"radius", "Radius (% of height)", &GlowNoiseSettings::radius, 3, 0, 20, 0.1},
+    {"brightness", "Brightness", &GlowNoiseSettings::brightness, 0.9, 0, 8, 0.05},
+    {"noiseAmount", "Noise amount", &GlowNoiseSettings::noiseAmount, 0.65, 0, 1, 0.01},
+    {"noiseScale", "Noise size (px at 1080p)", &GlowNoiseSettings::noiseScale, 10, 1, 150, 1},
+    {"speed", "Noise speed (Hz)", &GlowNoiseSettings::speed, 0.5, 0, 12, 0.05}
+};
+
+constexpr Number<GlowOrthiconSettings> glowOrthiconNumbers[] = {
+    {"threshold", "Highlight threshold", &GlowOrthiconSettings::threshold, 0.55, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlowOrthiconSettings::knee, 0.15, 0, 1, 0.01},
+    {"radius", "Radius (% of height)", &GlowOrthiconSettings::radius, 1.6, 0, 20, 0.1},
+    {"darkness", "Darkness", &GlowOrthiconSettings::darkness, 0.75, 0, 1, 0.01}
+};
+
+constexpr Number<GlowRainbowSettings> glowRainbowNumbers[] = {
+    {"threshold", "Highlight threshold", &GlowRainbowSettings::threshold, 0.55, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlowRainbowSettings::knee, 0.15, 0, 1, 0.01},
+    {"radius", "Radius (% of height)", &GlowRainbowSettings::radius, 3.5, 0, 20, 0.1},
+    {"brightness", "Brightness", &GlowRainbowSettings::brightness, 0.9, 0, 8, 0.05},
+    {"cycles", "Color cycles", &GlowRainbowSettings::cycles, 1.35, 0, 8, 0.05},
+    {"phase", "Phase (turns)", &GlowRainbowSettings::phase, 0, -8, 8, 0.05},
+    {"speed", "Cycle speed (Hz)", &GlowRainbowSettings::speed, 0.28, -8, 8, 0.025},
+    {"saturation", "Saturation", &GlowRainbowSettings::saturation, 0.95, 0, 1, 0.01}
+};
+
+constexpr Number<GlowRingsSettings> glowRingsNumbers[] = {
+    {"threshold", "Highlight threshold", &GlowRingsSettings::threshold, 0.55, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlowRingsSettings::knee, 0.15, 0, 1, 0.01},
+    {"radius", "Radius (% of height)", &GlowRingsSettings::radius, 4.5, 0, 20, 0.1},
+    {"brightness", "Brightness", &GlowRingsSettings::brightness, 0.9, 0, 8, 0.05},
+    {"thickness", "Ring thickness", &GlowRingsSettings::thickness, 0.24, 0.025, 1, 0.025},
+    {"dispersion", "Color dispersion", &GlowRingsSettings::dispersion, 0.45, 0, 1, 0.01}
+};
+
+constexpr Number<UltraGlowSettings> ultraGlowNumbers[] = {
+    {"threshold", "Highlight threshold", &UltraGlowSettings::threshold, 0.58, 0, 4, 0.01},
+    {"knee", "Soft knee", &UltraGlowSettings::knee, 0.18, 0, 2, 0.01},
+    {"radius", "Radius (% of height)", &UltraGlowSettings::radius, 2.6, 0, 20, 0.1},
+    {"brightness", "Brightness", &UltraGlowSettings::brightness, 1.2, 0, 8, 0.05},
+    {"spread", "Wide glow mix", &UltraGlowSettings::spread, 0.35, 0, 1, 0.01},
+    {"stretch", "Stretch (vertical to horizontal)", &UltraGlowSettings::stretch, 0, -1.5, 1.5, 0.025},
+    {"redWidth", "Red width", &UltraGlowSettings::redWidth, 1, 0, 3, 0.025},
+    {"greenWidth", "Green width", &UltraGlowSettings::greenWidth, 1, 0, 3, 0.025},
+    {"blueWidth", "Blue width", &UltraGlowSettings::blueWidth, 1, 0, 3, 0.025},
+    {"afterglow", "Afterglow", &UltraGlowSettings::afterglow, 0.55, 0, 3, 0.05}
+};
+
+constexpr Number<EdgeRaysSettings> edgeRaysNumbers[] = {
+    {"centerX", "Origin X", &EdgeRaysSettings::centerX, 0.5, -2, 3, 0.01},
+    {"centerY", "Origin Y", &EdgeRaysSettings::centerY, 0.55, -2, 3, 0.01},
+    {"length", "Ray length", &EdgeRaysSettings::length, 0.6, 0, 2, 0.01},
+    {"brightness", "Brightness", &EdgeRaysSettings::brightness, 2.2, 0, 10, 0.05},
+    {"threshold", "Edge threshold", &EdgeRaysSettings::threshold, 0.055, 0, 1, 0.005},
+    {"softness", "Edge softness", &EdgeRaysSettings::softness, 0.07, 0, 1, 0.005},
+    {"edgeSize", "Edge size (px at 1080p)", &EdgeRaysSettings::edgeSize, 2, 0.5, 16, 0.25},
+    {"decay", "Ray decay", &EdgeRaysSettings::decay, 1.4, 0, 8, 0.05}
 };
 
 class Controls {
@@ -612,6 +716,65 @@ void describeControls(Kind kind, Parameters parameters)
         controls.numbers(transitionSwish);
         controls.integer("samples", "Exposure samples", 9, 1, 32, 32);
         break;
+    case Kind::GlowAura:
+        controls.numbers(glowAuraNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowDarks:
+        controls.numbers(glowDarksNumbers);
+        controls.tint(0.12, 0.16, 0.22);
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowDist:
+        controls.numbers(glowDistNumbers);
+        controls.tint(0.6, 0.83, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowEdges:
+        controls.numbers(glowEdgesNumbers);
+        controls.tint(0.78, 0.88, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowNoise:
+        controls.numbers(glowNoiseNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 100);
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowOrthicon:
+        controls.numbers(glowOrthiconNumbers);
+        break;
+    case Kind::GlowRainbow:
+        controls.numbers(glowRainbowNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::GlowRings:
+        controls.numbers(glowRingsNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("rings", "Ring count", 3, 1, 6, 6);
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::UltraGlow:
+        controls.numbers(ultraGlowNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.checkbox("glowOnly", "Glow only");
+        break;
+    case Kind::EdgeRays:
+        controls.numbers(edgeRaysNumbers);
+        controls.tint(1, 0.91, 0.75);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("samples", "Ray samples", 36, 8, 96, 96);
+        controls.checkbox("raysOnly", "Rays only");
+        break;
     case Kind::Shake:
         break;
     }
@@ -682,6 +845,21 @@ bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time)
         return controls.readDouble("intensity", time) <= 0 && controls.readInt("glintOnly", time) == 0;
     case Kind::Streaks:
         return controls.readDouble("intensity", time) <= 0 && controls.readInt("streaksOnly", time) == 0;
+    case Kind::GlowAura:
+    case Kind::GlowDarks:
+    case Kind::GlowDist:
+    case Kind::GlowEdges:
+        return controls.readDouble("intensity", time) <= 0 && controls.readInt("glowOnly", time) == 0;
+    case Kind::GlowNoise:
+    case Kind::GlowRainbow:
+    case Kind::GlowRings:
+    case Kind::UltraGlow:
+        return controls.readDouble("brightness", time) <= 0 && controls.readInt("glowOnly", time) == 0;
+    case Kind::GlowOrthicon:
+        return controls.readDouble("darkness", time) <= 0 || controls.readDouble("radius", time) <= 0;
+    case Kind::EdgeRays:
+        return (controls.readDouble("brightness", time) <= 0 || controls.readDouble("length", time) <= 0)
+            && controls.readInt("raysOnly", time) == 0;
     default:
         return false;
     }
@@ -912,6 +1090,95 @@ void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& con
         controls.readTint(settings, time);
         settings.halationOnly = controls.readInt("halationOnly", time) != 0;
         renderHalation(context, settings);
+        break;
+    }
+    case Kind::GlowAura: {
+        GlowAuraSettings settings{};
+        controls.read(settings, glowAuraNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowAura(context, settings);
+        break;
+    }
+    case Kind::GlowDarks: {
+        GlowDarksSettings settings{};
+        controls.read(settings, glowDarksNumbers, time);
+        controls.readTint(settings, time);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowDarks(context, settings);
+        break;
+    }
+    case Kind::GlowDist: {
+        GlowDistSettings settings{};
+        controls.read(settings, glowDistNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowDist(context, settings);
+        break;
+    }
+    case Kind::GlowEdges: {
+        GlowEdgesSettings settings{};
+        controls.read(settings, glowEdgesNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowEdges(context, settings);
+        break;
+    }
+    case Kind::GlowNoise: {
+        GlowNoiseSettings settings{};
+        controls.read(settings, glowNoiseNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.seed = controls.readInt("seed", time);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowNoise(context, settings);
+        break;
+    }
+    case Kind::GlowOrthicon: {
+        GlowOrthiconSettings settings{};
+        controls.read(settings, glowOrthiconNumbers, time);
+        renderGlowOrthicon(context, settings);
+        break;
+    }
+    case Kind::GlowRainbow: {
+        GlowRainbowSettings settings{};
+        controls.read(settings, glowRainbowNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowRainbow(context, settings);
+        break;
+    }
+    case Kind::GlowRings: {
+        GlowRingsSettings settings{};
+        controls.read(settings, glowRingsNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.rings = std::clamp(controls.readInt("rings", time), 1, 6);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderGlowRings(context, settings);
+        break;
+    }
+    case Kind::UltraGlow: {
+        UltraGlowSettings settings{};
+        controls.read(settings, ultraGlowNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.glowOnly = controls.readInt("glowOnly", time) != 0;
+        renderUltraGlow(context, settings);
+        break;
+    }
+    case Kind::EdgeRays: {
+        EdgeRaysSettings settings{};
+        controls.read(settings, edgeRaysNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.samples = std::clamp(controls.readInt("samples", time), 8, 96);
+        settings.raysOnly = controls.readInt("raysOnly", time) != 0;
+        renderEdgeRays(context, settings);
         break;
     }
     case Kind::Dissolve:

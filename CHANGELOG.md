@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.06
+
+- Added ten lighting effects, including UltraGlow and GPU-accelerated EdgeRays.
+- Integrated Marcel's CPU rendering, OpenCL device selection, and OpenFX test harness changes.
+
 ## 0.03
 
 Added five effects, bringing the total to eleven. The six effects from 0.02 retain their identifiers, controls, and renderers.

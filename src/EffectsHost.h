@@ -14,7 +14,9 @@ enum class Kind {
     VHSDamage, FilmBurn, DistortRGB, WarpFishEye, WarpWaves,
     Glare, Glint, Streaks, HalfTone, BleachBypass,
     Blur, BlurDirectional, Sharpen, Vignette, Grain, Halation,
-    Dissolve, DissolveGlow, DissolveShake, SwishPan
+    Dissolve, DissolveGlow, DissolveShake, SwishPan,
+    GlowAura, GlowDarks, GlowDist, GlowEdges, GlowNoise, GlowOrthicon,
+    GlowRainbow, GlowRings, UltraGlow, EdgeRays
 };
 
 struct StatusError {
@@ -34,7 +36,7 @@ struct PixelFormat {
 };
 
 constexpr bool isTransition(Kind kind) {
-    return kind >= Kind::Dissolve;
+    return kind >= Kind::Dissolve && kind <= Kind::SwishPan;
 }
 
 constexpr TransitionKind transitionKind(Kind kind) {

@@ -4,8 +4,8 @@
 
 namespace diamond::fx {
 
-// The driver owns GPU selection and this API handles uploads/downloads from
-// ordinary CPU-memory OFX renders. Returns false so the caller can render on CPU.
+// Chooses an available OpenCL GPU and transfers ordinary CPU-memory OFX frames.
+// Returns false so the caller can render on CPU.
 bool runGpu05(const Context& context, const char* programSource, const char* kernelName,
               const void* params, std::size_t paramBytes,
               const void* extra = nullptr, std::size_t extraBytes = 0);
