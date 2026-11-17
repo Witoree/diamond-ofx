@@ -16,7 +16,9 @@ enum class Kind {
     Blur, BlurDirectional, Sharpen, Vignette, Grain, Halation,
     Dissolve, DissolveGlow, DissolveShake, SwishPan,
     GlowAura, GlowDarks, GlowDist, GlowEdges, GlowNoise, GlowOrthicon,
-    GlowRainbow, GlowRings, UltraGlow, EdgeRays
+    GlowRainbow, GlowRings, UltraGlow, EdgeRays,
+    GlintRainbow, BokehLights, DropShadow, Flashbulbs, Light3D, SpotLight, Hotspots,
+    FilmDamage, GrainStatic, UltraGrain, ImageInImage
 };
 
 struct StatusError {
@@ -49,7 +51,8 @@ TransitionSettings transitionSettingsAt(Kind kind, Parameters parameters, OfxTim
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
-                  void* abortContext, const ShakeSettings* shake = nullptr);
+                  void* abortContext, const ShakeSettings* shake = nullptr, ImageView normals = {},
+                  PixelFormat normalsFormat = {Depth::Float, 4, false});
 void renderTransitionEffect(TransitionKind kind, const TransitionSettings& settings, double progress,
                             ImageView from, PixelFormat fromFormat, ImageView to, PixelFormat toFormat,
                             MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,

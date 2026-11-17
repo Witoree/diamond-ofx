@@ -8,7 +8,7 @@
 
 namespace diamond::fx {
 
-void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& context);
+void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& context, const Image* normals);
 
 namespace {
 
@@ -180,7 +180,7 @@ void encodeImage(MutableImageView destination, PixelFormat format, const Context
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
-                  void* abortContext, const ShakeSettings* shake) {
+                  void* abortContext, const ShakeSettings* shake, ImageView normals, PixelFormat normalsFormat) {
     window = intersect(window, destination.bounds);
     if (!destination.data || empty(window) || (abort && abort(abortContext))) {
         return;
@@ -207,7 +207,15 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
             {output.data(), stride(output.bounds), output.bounds}, frame, window, Depth::Float, 4,
             timeFrames / fps, 1.0 / fps, pixelAspect, false, *shake, Cancellation::poll, &cancellation);
     } else {
-        renderConfiguredEffect(kind, parameters, context);
+        Image normalMap(normalsFormat.components >= 3 ? checkedSourceBounds(normals, normalsFormat) : Rect{});
+        const bool mapped = !empty(normalMap.bounds);
+        if (mapped) {
+            decodeImage(normals, normalsFormat, normalMap, context);
+            if (context.cancelled()) {
+                return;
+            }
+        }
+        renderConfiguredEffect(kind, parameters, context, mapped ? &normalMap : nullptr);
     }
     encodeImage(destination, outputFormat, context);
 }

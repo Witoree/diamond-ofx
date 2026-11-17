@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.07
+
+- Added ten lighting, compositing, and grain effects.
+- Added `D_ImageInImage` with independent, animatable perspective corners and preview handles on compatible hosts.
+
 ## 0.06
 
 - Added ten lighting effects, including UltraGlow and GPU-accelerated EdgeRays.

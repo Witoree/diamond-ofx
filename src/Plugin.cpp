@@ -1,5 +1,6 @@
 #include "EffectsHost.h"
 #include "Gpu05.h"
+#include "PictureOFX07.h"
 
 #include <ofxCore.h>
 #include <ofxImageEffect.h>
@@ -67,7 +68,18 @@ constexpr EffectDescription descriptions[] = {
     {"D_GlowRainbow", "Spread moving spectral bands around highlights.", true},
     {"D_GlowRings", "Draw concentric glow bands around bright details.", false},
     {"D_UltraGlow", "Layer a tight bloom with a broad halo and separate RGB widths.", false},
-    {"D_EdgeRays", "Project rays from contrast edges and silhouettes.", false}
+    {"D_EdgeRays", "Project rays from contrast edges and silhouettes.", false},
+    {"D_GlintRainbow", "Create spectral star glints around bright points.", false},
+    {"D_BokehLights", "Add drifting, defocused lights with an adjustable iris.", true},
+    {"D_DropShadow", "Composite a soft tinted shadow behind source transparency.", false},
+    {"D_Flashbulbs", "Scatter animated camera flashes across the image.", true},
+    {"D_Light3D", "Relight a diffuse pass with a point light and optional RGB normals.", false},
+    {"D_SpotLight", "Aim a soft 3D light cone at the source image.", false},
+    {"D_Hotspots", "Extract or enhance highlights while preserving their colors.", false},
+    {"D_FilmDamage", "Simulate scratched film, dust, hairs, flicker and gate weave.", true},
+    {"D_GrainStatic", "Add independent monochrome or color pixel noise.", true},
+    {"D_UltraGrain", "Model digital sensor grain with shot, read and fixed-pattern noise.", true},
+    {"D_ImageInImage", "Place, rotate and animate a perspective-pinned picture over the canvas.", false}
 };
 
 const EffectDescription& description(Kind kind)
@@ -79,6 +91,7 @@ constexpr const char* sourceName = kOfxImageEffectSimpleSourceClipName;
 constexpr const char* sourceFromName = kOfxImageEffectTransitionSourceFromClipName;
 constexpr const char* sourceToName = kOfxImageEffectTransitionSourceToClipName;
 constexpr const char* outputName = kOfxImageEffectOutputClipName;
+constexpr const char* normalsName = "Normals";
 
 std::atomic<OfxHost*> host{nullptr};
 std::mutex suiteLoad;
@@ -193,6 +206,20 @@ const char* stringProperty(OfxPropertySetHandle properties, const char* name)
     return nullptr;
 }
 
+OfxImageClipHandle normalClip(OfxImageEffectHandle effect, OfxPropertySetHandle& properties)
+{
+    OfxImageClipHandle result = nullptr;
+    if (effects->clipGetHandle(effect, normalsName, &result, &properties) != kOfxStatOK) {
+        return nullptr;
+    }
+    int connected = 1;
+    if (properties && props->propGetInt(properties, kOfxImageClipPropConnected, 0, &connected) == kOfxStatOK
+        && !connected) {
+        return nullptr;
+    }
+    return result;
+}
+
 void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, Kind kind)
 {
     require(props->propSetInt(outArgs, kOfxImageEffectFrameVarying, 0, description(kind).frameVarying ? 1 : 0));
@@ -211,9 +238,12 @@ void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, 
         || kind == Kind::Glint || kind == Kind::Streaks || kind == Kind::DistortRGB
         || kind == Kind::WarpFishEye || kind == Kind::WarpWaves || kind == Kind::Blur
         || kind == Kind::BlurDirectional || kind == Kind::Halation
-        || (kind >= Kind::GlowAura && kind != Kind::GlowOrthicon);
-    if (canCreateAlpha && is(stringProperty(effectProperties(effect), kOfxImageEffectPropContext),
-                             kOfxImageEffectContextGeneral)) {
+        || (kind >= Kind::GlowAura && kind <= Kind::EdgeRays && kind != Kind::GlowOrthicon)
+        || kind == Kind::GlintRainbow || kind == Kind::BokehLights || kind == Kind::Flashbulbs
+        || kind == Kind::DropShadow || kind == Kind::ImageInImage;
+    const bool separateOutputAlpha = kind == Kind::ImageInImage || kind == Kind::DropShadow;
+    if (canCreateAlpha && (separateOutputAlpha || is(
+            stringProperty(effectProperties(effect), kOfxImageEffectPropContext), kOfxImageEffectContextGeneral))) {
         const auto* current = host.load();
         int count = 0;
         if (current && props->propGetDimension(current->host,
@@ -252,6 +282,9 @@ void describe(OfxImageEffectHandle effect, Kind kind)
     require(props->propSetString(properties, kOfxImageEffectPluginRenderThreadSafety, 0, kOfxImageEffectRenderFullySafe));
     props->propSetInt(properties, kOfxImageEffectPluginPropHostFrameThreading, 0, 0);
     props->propSetInt(properties, kOfxImageEffectPluginPropFieldRenderTwiceAlways, 0, 1);
+    if (kind == Kind::ImageInImage) {
+        diamond::fx::registerPictureOverlay(host.load(), effects, {props, params, nullptr}, properties);
+    }
 }
 
 void describeClip(OfxImageEffectHandle effect, const char* name)
@@ -274,7 +307,7 @@ OfxPropertySetHandle defineControl(OfxParamSetHandle set, const char* type, cons
     return properties;
 }
 
-void describeInContext(OfxImageEffectHandle effect, Kind kind)
+void describeInContext(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind kind)
 {
     const auto set = parameters(effect);
     if (isTransition(kind)) {
@@ -285,6 +318,15 @@ void describeInContext(OfxImageEffectHandle effect, Kind kind)
         require(params->paramDefine(set, kOfxParamTypeDouble, kOfxImageEffectTransitionParamName, &progress));
     } else {
         describeClip(effect, sourceName);
+        if (kind == Kind::Light3D && is(stringProperty(inArgs, kOfxImageEffectPropContext),
+                                        kOfxImageEffectContextGeneral)) {
+            OfxPropertySetHandle normals = nullptr;
+            require(effects->clipDefine(effect, normalsName, &normals));
+            require(props->propSetString(normals, kOfxImageEffectPropSupportedComponents, 0, kOfxImageComponentRGBA));
+            require(props->propSetString(normals, kOfxImageEffectPropSupportedComponents, 1, kOfxImageComponentRGB));
+            require(props->propSetInt(normals, kOfxImageClipPropOptional, 0, 1));
+            props->propSetInt(normals, kOfxImageEffectPropSupportsTiles, 0, 0);
+        }
     }
     describeClip(effect, outputName);
 
@@ -408,7 +450,16 @@ OfxStatus regionsOfInterest(OfxImageEffectHandle effect, OfxPropertySetHandle in
     }
     const auto time = actionTime(inArgs);
     if (!isTransition(kind)) {
-        return setSourceRegion(effect, time, outArgs, sourceName, "OfxImageClipPropRoI_Source");
+        const auto result = setSourceRegion(effect, time, outArgs, sourceName, "OfxImageClipPropRoI_Source");
+        if (kind == Kind::Light3D && (result == kOfxStatOK || result == kOfxStatReplyDefault)) {
+            OfxPropertySetHandle normalsProperties = nullptr;
+            if (normalClip(effect, normalsProperties)) {
+                const auto normalResult = setSourceRegion(effect, time, outArgs, normalsName,
+                                                          "OfxImageClipPropRoI_Normals");
+                return normalResult == kOfxStatReplyDefault ? result : normalResult;
+            }
+        }
+        return result;
     }
 
     const auto from = setSourceRegion(effect, time, outArgs, sourceFromName, "OfxImageClipPropRoI_SourceFrom");
@@ -609,8 +660,12 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
         return kOfxStatOK;
     }
 
+    OfxPropertySetHandle normalsProperties = nullptr;
+    const Image normals(kind == Kind::Light3D ? normalClip(effect, normalsProperties) : nullptr, time, false);
+    const auto normalFrame = inputFrame(normals, normalsProperties, format);
     diamond::fx::renderEffect(kind, {props, params, parameters(effect)}, source.view, source.format,
-        destination, format, frame, window, pixelAspect, time, fps, aborted, effect);
+        destination, format, frame, window, pixelAspect, time, fps, aborted, effect, nullptr,
+        normalFrame.view, normalFrame.format);
     return kOfxStatOK;
 }
 
@@ -637,7 +692,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         if (is(action, kOfxActionDescribe)) {
             describe(effect, kind);
         } else if (is(action, kOfxImageEffectActionDescribeInContext)) {
-            describeInContext(effect, kind);
+            describeInContext(effect, inArgs, kind);
         } else if (is(action, kOfxActionCreateInstance) || is(action, kOfxActionDestroyInstance)) {
             return kOfxStatOK;
         } else if (is(action, kOfxImageEffectActionGetClipPreferences)) {
@@ -652,6 +707,15 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
             return kOfxStatReplyDefault;
         } else if (is(action, kOfxImageEffectActionGetRegionsOfInterest)) {
             return regionsOfInterest(effect, inArgs, outArgs, kind);
+        } else if (is(action, kOfxImageEffectActionGetRegionOfDefinition)) {
+            if constexpr (kind == Kind::ImageInImage) {
+                OfxRectD area{};
+                if (diamond::fx::pictureProjectArea(effects, props, effect, area)) {
+                    const double values[]{area.x1, area.y1, area.x2, area.y2};
+                    return props->propSetDoubleN(outArgs, kOfxImageEffectPropRegionOfDefinition, 4, values);
+                }
+            }
+            return kOfxStatReplyDefault;
         } else if (is(action, kOfxImageEffectActionRender)) {
             return render(effect, inArgs, kind);
         } else {
@@ -708,7 +772,18 @@ OfxPlugin plugins[] = {
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowrainbow", 0, 6, setHost, mainEntry<Kind::GlowRainbow>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglowrings", 0, 6, setHost, mainEntry<Kind::GlowRings>},
     {kOfxImageEffectPluginApi, 1, "com.diamondfx.dultraglow", 0, 6, setHost, mainEntry<Kind::UltraGlow>},
-    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dedgerays", 0, 6, setHost, mainEntry<Kind::EdgeRays>}
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dedgerays", 0, 6, setHost, mainEntry<Kind::EdgeRays>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dglintrainbow", 0, 7, setHost, mainEntry<Kind::GlintRainbow>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dbokehlights", 0, 7, setHost, mainEntry<Kind::BokehLights>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.ddropshadow", 0, 7, setHost, mainEntry<Kind::DropShadow>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dflashbulbs", 0, 7, setHost, mainEntry<Kind::Flashbulbs>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dlight3d", 0, 7, setHost, mainEntry<Kind::Light3D>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dspotlight", 0, 7, setHost, mainEntry<Kind::SpotLight>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dhotspots", 0, 7, setHost, mainEntry<Kind::Hotspots>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dfilmdamage", 0, 7, setHost, mainEntry<Kind::FilmDamage>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dgrainstatic", 0, 7, setHost, mainEntry<Kind::GrainStatic>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dultragrain", 0, 7, setHost, mainEntry<Kind::UltraGrain>},
+    {kOfxImageEffectPluginApi, 1, "com.diamondfx.dimageinimage", 0, 7, setHost, mainEntry<Kind::ImageInImage>}
 };
 
 constexpr int pluginCount = static_cast<int>(sizeof(plugins) / sizeof(plugins[0]));

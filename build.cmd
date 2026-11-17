@@ -33,7 +33,9 @@ cl.exe /nologo /std:c++17 /permissive- /W4 /utf-8 /EHsc /O2 /MT /LD ^
     "%diamondRoot%src\Video05.cpp" "%diamondRoot%src\Transitions05.cpp" "%diamondRoot%src\Gpu05.cpp" ^
     "%diamondRoot%src\GlowAuraDarksDistEdges.cpp" "%diamondRoot%src\GlowSpectral06.cpp" ^
     "%diamondRoot%src\UltraGlowEdgeRays.cpp" ^
-    /Fe:"%diamondBinDir%\Diamond.ofx" /link /MACHINE:X64 /INCREMENTAL:NO /IMPLIB:"Diamond.lib"
+    "%diamondRoot%src\Optics07.cpp" "%diamondRoot%src\Composite07.cpp" "%diamondRoot%src\Film07.cpp" ^
+    "%diamondRoot%src\ImageInImage07.cpp" "%diamondRoot%src\PictureOFX07.cpp" ^
+    /Fe:"%diamondBinDir%\Diamond.ofx" /link /MACHINE:X64 /INCREMENTAL:NO /IMPLIB:"Diamond.lib" opengl32.lib
 set "diamondBuildStatus=%ERRORLEVEL%"
 popd
 exit /b %diamondBuildStatus%

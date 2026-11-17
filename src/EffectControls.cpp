@@ -1,9 +1,13 @@
 #include "EffectsHost.h"
+#include "Composite07.h"
+#include "Film07.h"
 #include "Glow06.h"
 #include "GlowSpectral06.h"
 #include "NewOptics.h"
 #include "NewStylize.h"
 #include "NewWarp.h"
+#include "Optics07.h"
+#include "PictureOFX07.h"
 #include "UltraGlowEdgeRays.h"
 #include "Video05.h"
 
@@ -410,6 +414,118 @@ constexpr Number<EdgeRaysSettings> edgeRaysNumbers[] = {
     {"decay", "Ray decay", &EdgeRaysSettings::decay, 1.4, 0, 8, 0.05}
 };
 
+constexpr Number<GlintRainbowSettings> glintRainbowNumbers[] = {
+    {"threshold", "Highlight threshold", &GlintRainbowSettings::threshold, 0.65, 0, 4, 0.01},
+    {"knee", "Soft knee", &GlintRainbowSettings::knee, 0.12, 0, 2, 0.01},
+    {"length", "Length (% of height)", &GlintRainbowSettings::length, 6, 0, 35, 0.1},
+    {"width", "Streak width (px at 1080p)", &GlintRainbowSettings::width, 2.5, 0.25, 20, 0.25},
+    {"rotation", "Rotation (degrees)", &GlintRainbowSettings::rotation, 0, -180, 180, 1},
+    {"dispersion", "Dispersion", &GlintRainbowSettings::dispersion, 0.6, 0, 1, 0.01},
+    {"hue", "Hue shift (turns)", &GlintRainbowSettings::hue, 0, -1, 1, 0.01},
+    {"intensity", "Intensity", &GlintRainbowSettings::intensity, 1, 0, 10, 0.05},
+    {"alphaWeight", "Alpha influence", &GlintRainbowSettings::alphaWeight, 0, 0, 1, 0.01}
+};
+
+constexpr Number<BokehLightsSettings> bokehLightsNumbers[] = {
+    {"size", "Radius (% of height)", &BokehLightsSettings::size, 5, 0.1, 35, 0.1},
+    {"sizeVariation", "Size variation", &BokehLightsSettings::sizeVariation, 0.65, 0, 1, 0.01},
+    {"softness", "Edge softness", &BokehLightsSettings::softness, 0.23, 0, 1, 0.01},
+    {"aspect", "Iris aspect ratio", &BokehLightsSettings::aspect, 1, 0.25, 4, 0.05},
+    {"rotation", "Rotation (degrees)", &BokehLightsSettings::rotation, 0, -180, 180, 1},
+    {"intensity", "Intensity", &BokehLightsSettings::intensity, 0.52, 0, 10, 0.05},
+    {"hueVariation", "Color variation", &BokehLightsSettings::hueVariation, 0.35, 0, 1, 0.01},
+    {"drift", "Drift (% of height)", &BokehLightsSettings::drift, 10, 0, 50, 0.1},
+    {"speed", "Drift speed (cycles/sec)", &BokehLightsSettings::speed, 0.2, -5, 5, 0.025},
+    {"flicker", "Flicker", &BokehLightsSettings::flicker, 0.2, 0, 1, 0.01}
+};
+
+constexpr Number<DropShadowSettings> dropShadowNumbers[] = {
+    {"offsetX", "Offset X (% of height)", &DropShadowSettings::offsetX, 1.2, -100, 100, 0.1},
+    {"offsetY", "Offset Y (% of height)", &DropShadowSettings::offsetY, -1.2, -100, 100, 0.1},
+    {"radius", "Radius (% of height)", &DropShadowSettings::radius, 1.5, 0, 20, 0.1},
+    {"spread", "Spread", &DropShadowSettings::spread, 0.12, 0, 1, 0.01},
+    {"opacity", "Opacity", &DropShadowSettings::opacity, 0.6, 0, 1, 0.01}
+};
+
+constexpr Number<FlashbulbsSettings> flashbulbsNumbers[] = {
+    {"rate", "Flashes per second", &FlashbulbsSettings::rate, 8, 0, 80, 0.25},
+    {"duration", "Flash duration (seconds)", &FlashbulbsSettings::duration, 0.105, 0.01, 1, 0.005},
+    {"size", "Radius (% of height)", &FlashbulbsSettings::size, 3, 0.1, 30, 0.1},
+    {"sizeVariation", "Size variation", &FlashbulbsSettings::sizeVariation, 0.62, 0, 1, 0.01},
+    {"intensity", "Intensity", &FlashbulbsSettings::intensity, 1.65, 0, 10, 0.05},
+    {"trail", "Glow trail", &FlashbulbsSettings::trail, 0.42, 0, 1, 0.01},
+    {"rotation", "Rotation (degrees)", &FlashbulbsSettings::rotation, 0, -180, 180, 1},
+    {"centerX", "Center X", &FlashbulbsSettings::centerX, 0.5, -1, 2, 0.01},
+    {"centerY", "Center Y", &FlashbulbsSettings::centerY, 0.57, -1, 2, 0.01},
+    {"spreadX", "Spread X", &FlashbulbsSettings::spreadX, 0.9, 0, 2, 0.01},
+    {"spreadY", "Spread Y", &FlashbulbsSettings::spreadY, 0.48, 0, 2, 0.01}
+};
+
+constexpr Number<Light3DSettings> light3DNumbers[] = {
+    {"centerX", "Light X", &Light3DSettings::centerX, 0.38, -1, 2, 0.01},
+    {"centerY", "Light Y", &Light3DSettings::centerY, 0.68, -1, 2, 0.01},
+    {"elevation", "Elevation (frame heights)", &Light3DSettings::elevation, 0.75, 0.04, 8, 0.025},
+    {"ambient", "Ambient", &Light3DSettings::ambient, 0.45, 0, 2, 0.05},
+    {"diffuse", "Diffuse", &Light3DSettings::diffuse, 1.1, 0, 4, 0.05},
+    {"specular", "Specular", &Light3DSettings::specular, 0.22, 0, 4, 0.05},
+    {"roughness", "Roughness", &Light3DSettings::roughness, 0.36, 0.05, 1, 0.01},
+    {"falloff", "Distance falloff", &Light3DSettings::falloff, 0.7, 0, 4, 0.05},
+    {"normalStrength", "Normal strength", &Light3DSettings::normalStrength, 1, 0, 4, 0.05},
+    {"mix", "Mix", &Light3DSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<SpotLightSettings> spotLightNumbers[] = {
+    {"lightX", "Light X", &SpotLightSettings::lightX, 0.35, -2, 3, 0.01},
+    {"lightY", "Light Y", &SpotLightSettings::lightY, 0.8, -2, 3, 0.01},
+    {"aimX", "Aim X", &SpotLightSettings::aimX, 0.53, -2, 3, 0.01},
+    {"aimY", "Aim Y", &SpotLightSettings::aimY, 0.44, -2, 3, 0.01},
+    {"height", "Height (% of frame height)", &SpotLightSettings::height, 75, 1, 400, 1},
+    {"angle", "Cone opening (degrees)", &SpotLightSettings::angle, 42, 1, 160, 0.5},
+    {"softness", "Edge softness", &SpotLightSettings::softness, 0.32, 0, 1, 0.01},
+    {"falloff", "Distance falloff", &SpotLightSettings::falloff, 0.4, 0, 2, 0.05},
+    {"ambient", "Ambient", &SpotLightSettings::ambient, 0.25, 0, 4, 0.05},
+    {"inside", "Inside gain", &SpotLightSettings::inside, 1.35, 0, 8, 0.05},
+    {"outside", "Outside gain", &SpotLightSettings::outside, 0, 0, 8, 0.05}
+};
+
+constexpr Number<HotspotsSettings> hotspotsNumbers[] = {
+    {"threshold", "Highlight threshold", &HotspotsSettings::threshold, 0.72, 0, 8, 0.01},
+    {"knee", "Soft knee", &HotspotsSettings::knee, 0.12, 0, 2, 0.01},
+    {"brightness", "Brightness", &HotspotsSettings::brightness, 1, 0, 8, 0.05},
+    {"saturation", "Saturation", &HotspotsSettings::saturation, 1, 0, 3, 0.05},
+    {"smoothing", "Smoothing (% of height)", &HotspotsSettings::smoothing, 0, 0, 5, 0.1},
+    {"mix", "Mix", &HotspotsSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<FilmDamageSettings> filmDamageNumbers[] = {
+    {"dust", "Dust", &FilmDamageSettings::dust, 0.45, 0, 1, 0.01},
+    {"hair", "Hair", &FilmDamageSettings::hair, 0.22, 0, 1, 0.01},
+    {"scratches", "Scratches", &FilmDamageSettings::scratches, 0.35, 0, 1, 0.01},
+    {"flicker", "Flicker", &FilmDamageSettings::flicker, 0.24, 0, 1, 0.01},
+    {"weave", "Gate weave", &FilmDamageSettings::weave, 0.22, 0, 1, 0.01},
+    {"size", "Damage size", &FilmDamageSettings::size, 1, 0.15, 6, 0.05},
+    {"speed", "Refresh rate (Hz)", &FilmDamageSettings::speed, 18, 0, 120, 0.5},
+    {"mix", "Mix", &FilmDamageSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<GrainStaticSettings> grainStaticNumbers[] = {
+    {"amount", "Amount", &GrainStaticSettings::amount, 0.25, 0, 1, 0.01},
+    {"color", "Color noise", &GrainStaticSettings::color, 0.15, 0, 1, 0.01},
+    {"speed", "Refresh rate (Hz)", &GrainStaticSettings::speed, 30, 0, 120, 0.5},
+    {"mix", "Mix", &GrainStaticSettings::mix, 1, 0, 1, 0.01}
+};
+
+constexpr Number<UltraGrainSettings> ultraGrainNumbers[] = {
+    {"amount", "Amount", &UltraGrainSettings::amount, 0.3, 0, 1, 0.01},
+    {"photonNoise", "Photon noise", &UltraGrainSettings::photonNoise, 0.48, 0, 1, 0.01},
+    {"readNoise", "Read noise", &UltraGrainSettings::readNoise, 0.2, 0, 1, 0.01},
+    {"fixedPattern", "Fixed-pattern noise", &UltraGrainSettings::fixedPattern, 0.1, 0, 1, 0.01},
+    {"color", "Color noise", &UltraGrainSettings::color, 0.2, 0, 1, 0.01},
+    {"size", "Grain size (px at 1080p)", &UltraGrainSettings::size, 1.2, 0.35, 12, 0.05},
+    {"speed", "Refresh rate (Hz)", &UltraGrainSettings::speed, 30, 0, 120, 0.5},
+    {"mix", "Mix", &UltraGrainSettings::mix, 1, 0, 1, 0.01}
+};
+
 class Controls {
 public:
     explicit Controls(Parameters parameters) : params_(parameters) {}
@@ -775,6 +891,66 @@ void describeControls(Kind kind, Parameters parameters)
         controls.integer("samples", "Ray samples", 36, 8, 96, 96);
         controls.checkbox("raysOnly", "Rays only");
         break;
+    case Kind::GlintRainbow:
+        controls.numbers(glintRainbowNumbers);
+        controls.tint(1, 1, 1);
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("rays", "Rays", 8, 2, 12, 12);
+        controls.checkbox("lightsOnly", "Glints only");
+        break;
+    case Kind::BokehLights:
+        controls.numbers(bokehLightsNumbers);
+        controls.tint(1, 0.78, 0.58);
+        controls.choice("blend", "Blend", 1, {"Add", "Screen"});
+        controls.integer("count", "Light count", 28, 0, 200, 200);
+        controls.integer("blades", "Iris blades (0 = circle)", 0, 0, 12, 12);
+        controls.integer("seed", "Seed", 19, 0, std::numeric_limits<int>::max(), 999);
+        controls.checkbox("lightsOnly", "Lights only");
+        break;
+    case Kind::DropShadow:
+        controls.numbers(dropShadowNumbers);
+        controls.tint(0, 0, 0);
+        controls.checkbox("shadowOnly", "Shadow only");
+        break;
+    case Kind::Flashbulbs:
+        controls.numbers(flashbulbsNumbers);
+        controls.tint(0.86, 0.93, 1);
+        controls.choice("style", "Flash style", 0, {"Camera", "Star", "Soft"});
+        controls.choice("blend", "Blend", 0, {"Add", "Screen"});
+        controls.integer("seed", "Seed", 217, 0, std::numeric_limits<int>::max(), 999);
+        controls.checkbox("lightsOnly", "Flashes only");
+        break;
+    case Kind::Light3D:
+        controls.numbers(light3DNumbers);
+        controls.tint(1, 0.94, 0.86);
+        controls.checkbox("flipGreen", "Flip normal Y");
+        controls.checkbox("lightingOnly", "Lighting only");
+        controls.checkbox("signedNormals", "Signed float normals");
+        break;
+    case Kind::SpotLight:
+        controls.numbers(spotLightNumbers);
+        controls.tint(1, 0.92, 0.79);
+        controls.checkbox("lightOnly", "Lighting only");
+        break;
+    case Kind::Hotspots:
+        controls.numbers(hotspotsNumbers);
+        controls.choice("outputMode", "Output", 0, {"Isolate Highlights", "Boost Highlights", "Matte"});
+        break;
+    case Kind::FilmDamage:
+        controls.numbers(filmDamageNumbers);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 999);
+        break;
+    case Kind::GrainStatic:
+        controls.numbers(grainStaticNumbers);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 999);
+        break;
+    case Kind::UltraGrain:
+        controls.numbers(ultraGrainNumbers);
+        controls.integer("seed", "Seed", 0, 0, std::numeric_limits<int>::max(), 999);
+        break;
+    case Kind::ImageInImage:
+        describePictureControls(parameters);
+        break;
     case Kind::Shake:
         break;
     }
@@ -860,12 +1036,31 @@ bool controlsAreIdentity(Kind kind, Parameters parameters, OfxTime time)
     case Kind::EdgeRays:
         return (controls.readDouble("brightness", time) <= 0 || controls.readDouble("length", time) <= 0)
             && controls.readInt("raysOnly", time) == 0;
+    case Kind::GlintRainbow:
+        return (controls.readDouble("intensity", time) <= 0 || controls.readDouble("length", time) <= 0)
+            && controls.readInt("lightsOnly", time) == 0;
+    case Kind::BokehLights:
+        return (controls.readDouble("intensity", time) <= 0 || controls.readInt("count", time) <= 0)
+            && controls.readInt("lightsOnly", time) == 0;
+    case Kind::DropShadow:
+        return controls.readDouble("opacity", time) <= 0 && controls.readInt("shadowOnly", time) == 0;
+    case Kind::Flashbulbs:
+        return (controls.readDouble("intensity", time) <= 0 || controls.readDouble("rate", time) <= 0)
+            && controls.readInt("lightsOnly", time) == 0;
+    case Kind::Light3D:
+        return controls.readDouble("mix", time) <= 0 && controls.readInt("lightingOnly", time) == 0;
+    case Kind::Hotspots:
+    case Kind::FilmDamage:
+        return controls.readDouble("mix", time) <= 0;
+    case Kind::GrainStatic:
+    case Kind::UltraGrain:
+        return controls.readDouble("amount", time) <= 0 || controls.readDouble("mix", time) <= 0;
     default:
         return false;
     }
 }
 
-void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& context)
+void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& context, const Image* normals)
 {
     Controls controls(parameters);
     const auto time = context.timeFrames;
@@ -1181,6 +1376,96 @@ void renderConfiguredEffect(Kind kind, Parameters parameters, const Context& con
         renderEdgeRays(context, settings);
         break;
     }
+    case Kind::GlintRainbow: {
+        GlintRainbowSettings settings{};
+        controls.read(settings, glintRainbowNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.rays = std::clamp(controls.readInt("rays", time), 2, 12);
+        settings.lightsOnly = controls.readInt("lightsOnly", time) != 0;
+        renderGlintRainbow(context, settings);
+        break;
+    }
+    case Kind::BokehLights: {
+        BokehLightsSettings settings{};
+        controls.read(settings, bokehLightsNumbers, time);
+        controls.readTint(settings, time);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.count = std::clamp(controls.readInt("count", time), 0, 200);
+        settings.blades = std::clamp(controls.readInt("blades", time), 0, 12);
+        settings.seed = controls.readInt("seed", time);
+        settings.lightsOnly = controls.readInt("lightsOnly", time) != 0;
+        renderBokehLights(context, settings);
+        break;
+    }
+    case Kind::DropShadow: {
+        DropShadowSettings settings{};
+        controls.read(settings, dropShadowNumbers, time);
+        controls.readTint(settings, time);
+        settings.shadowOnly = controls.readInt("shadowOnly", time) != 0;
+        renderDropShadow(context, settings);
+        break;
+    }
+    case Kind::Flashbulbs: {
+        FlashbulbsSettings settings{};
+        controls.read(settings, flashbulbsNumbers, time);
+        controls.readTint(settings, time);
+        settings.style = std::clamp(controls.readInt("style", time), 0, 2);
+        settings.blend = std::clamp(controls.readInt("blend", time), 0, 1);
+        settings.seed = controls.readInt("seed", time);
+        settings.lightsOnly = controls.readInt("lightsOnly", time) != 0;
+        renderFlashbulbs(context, settings);
+        break;
+    }
+    case Kind::Light3D: {
+        Light3DSettings settings{};
+        controls.read(settings, light3DNumbers, time);
+        controls.readTint(settings, time);
+        settings.flipGreen = controls.readInt("flipGreen", time) != 0;
+        settings.lightingOnly = controls.readInt("lightingOnly", time) != 0;
+        settings.signedNormals = controls.readInt("signedNormals", time) != 0;
+        renderLight3D(context, settings, normals);
+        break;
+    }
+    case Kind::SpotLight: {
+        SpotLightSettings settings{};
+        controls.read(settings, spotLightNumbers, time);
+        controls.readTint(settings, time);
+        settings.lightOnly = controls.readInt("lightOnly", time) != 0;
+        renderSpotLight(context, settings);
+        break;
+    }
+    case Kind::Hotspots: {
+        HotspotsSettings settings{};
+        controls.read(settings, hotspotsNumbers, time);
+        settings.outputMode = std::clamp(controls.readInt("outputMode", time), 0, 2);
+        renderHotspots(context, settings);
+        break;
+    }
+    case Kind::FilmDamage: {
+        FilmDamageSettings settings{};
+        controls.read(settings, filmDamageNumbers, time);
+        settings.seed = controls.readInt("seed", time);
+        renderFilmDamage(context, settings);
+        break;
+    }
+    case Kind::GrainStatic: {
+        GrainStaticSettings settings{};
+        controls.read(settings, grainStaticNumbers, time);
+        settings.seed = controls.readInt("seed", time);
+        renderGrainStatic(context, settings);
+        break;
+    }
+    case Kind::UltraGrain: {
+        UltraGrainSettings settings{};
+        controls.read(settings, ultraGrainNumbers, time);
+        settings.seed = controls.readInt("seed", time);
+        renderUltraGrain(context, settings);
+        break;
+    }
+    case Kind::ImageInImage:
+        renderImageInImage(context, pictureSettingsAt(parameters, time));
+        break;
     case Kind::Dissolve:
     case Kind::DissolveGlow:
     case Kind::DissolveShake:
