@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <mutex>
 #include <new>
 
@@ -92,6 +93,8 @@ constexpr const char* sourceFromName = kOfxImageEffectTransitionSourceFromClipNa
 constexpr const char* sourceToName = kOfxImageEffectTransitionSourceToClipName;
 constexpr const char* outputName = kOfxImageEffectOutputClipName;
 constexpr const char* normalsName = "Normals";
+// VEGAS also requests the region through the legacy Catalyst action.
+constexpr const char* vegasGetRegion = "OfxCatalystImageEffectActionGetRegionOfDefinition";
 
 std::atomic<OfxHost*> host{nullptr};
 std::mutex suiteLoad;
@@ -231,6 +234,13 @@ void clipPreferences(OfxImageEffectHandle effect, OfxPropertySetHandle outArgs, 
     // Opaque input can produce transparency at uncovered frame edges.
     props->propSetString(outArgs, kOfxImageEffectPropPreMultiplication, 0,
         straightAlpha ? kOfxImageUnPreMultiplied : kOfxImagePreMultiplied);
+    if (kind == Kind::ImageInImage) {
+        double projectPar = 0;
+        if (props->propGetDouble(effectProperties(effect), kOfxImageEffectPropProjectPixelAspectRatio, 0,
+                                 &projectPar) == kOfxStatOK && std::isfinite(projectPar) && projectPar > 0) {
+            props->propSetDouble(outArgs, "OfxImageClipPropPAR_Output", 0, projectPar);
+        }
+    }
 
     // In General, compositing hosts can supply an RGBA output for isolated
     // light and transparent warp edges, even when the source is RGB.
@@ -278,11 +288,14 @@ void describe(OfxImageEffectHandle effect, Kind kind)
     require(props->propSetString(properties, kOfxImageEffectPropSupportedPixelDepths, 2, kOfxBitDepthFloat));
     require(props->propSetInt(properties, kOfxImageEffectPropSupportsTiles, 0, 0));
     require(props->propSetInt(properties, kOfxImageEffectPropSupportsMultipleClipDepths, 0, 0));
-    require(props->propSetInt(properties, kOfxImageEffectPropSupportsMultipleClipPARs, 0, 0));
+    require(props->propSetInt(properties, kOfxImageEffectPropSupportsMultipleClipPARs, 0,
+                             kind == Kind::ImageInImage ? 1 : 0));
     require(props->propSetString(properties, kOfxImageEffectPluginRenderThreadSafety, 0, kOfxImageEffectRenderFullySafe));
     props->propSetInt(properties, kOfxImageEffectPluginPropHostFrameThreading, 0, 0);
     props->propSetInt(properties, kOfxImageEffectPluginPropFieldRenderTwiceAlways, 0, 1);
     if (kind == Kind::ImageInImage) {
+        props->propSetInt(properties, kOfxImageEffectPropSupportsMultiResolution, 0, 1);
+        props->propSetString(properties, kOfxPropVersionLabel, 0, "0.07.1");
         diamond::fx::registerPictureOverlay(host.load(), effects, {props, params, nullptr}, properties);
     }
 }
@@ -472,12 +485,17 @@ OfxStatus regionsOfInterest(OfxImageEffectHandle effect, OfxPropertySetHandle in
 
 class Image {
 public:
-    Image(OfxImageClipHandle input, OfxTime time, bool required)
+    Image(OfxImageClipHandle input, OfxTime time, bool required, const OfxRectD* requested = nullptr)
     {
         if (!input && !required) {
             return;
         }
-        const auto status = effects->clipGetImage(input, time, nullptr, &properties_);
+        auto status = effects->clipGetImage(input, time, requested, &properties_);
+        if (requested && (status == kOfxStatFailed || status == kOfxStatErrUnsupported
+                          || status == kOfxStatErrValue)) {
+            // Some hosts only accept their default output request.
+            status = effects->clipGetImage(input, time, nullptr, &properties_);
+        }
         if (status == kOfxStatFailed && !required) {
             properties_ = nullptr;
             return;
@@ -588,6 +606,31 @@ double positiveProperty(OfxPropertySetHandle properties, const char* name, int i
     return fallback;
 }
 
+double imageFieldScale(OfxPropertySetHandle properties, double fallback = 1.0)
+{
+    const auto field = stringProperty(properties, kOfxImagePropField);
+    if (!field) {
+        return fallback;
+    }
+    return is(field, kOfxImageFieldLower) || is(field, kOfxImageFieldUpper) ? 0.5 : 1.0;
+}
+
+diamond::Rect pixelArea(OfxRectD area, double xFactor, double yFactor, diamond::Rect fallback)
+{
+    const double left = std::floor(area.x1 * xFactor + 1.0e-8);
+    const double bottom = std::floor(area.y1 * yFactor + 1.0e-8);
+    const double right = std::ceil(area.x2 * xFactor - 1.0e-8);
+    const double top = std::ceil(area.y2 * yFactor - 1.0e-8);
+    constexpr auto low = std::numeric_limits<int>::min();
+    constexpr auto high = std::numeric_limits<int>::max();
+    if (!(left >= low && bottom >= low && right <= high && top <= high
+          && right > left && top > bottom && right - left <= high && top - bottom <= high)) {
+        return fallback;
+    }
+    return {static_cast<int>(left), static_cast<int>(bottom),
+            static_cast<int>(right), static_cast<int>(top)};
+}
+
 bool aborted(void* context)
 {
     return effects->abort && effects->abort(static_cast<OfxImageEffectHandle>(context)) != 0;
@@ -604,8 +647,12 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
         return kOfxStatOK;
     }
 
+    OfxRectD projectArea{};
+    const bool projectCanvas = kind == Kind::ImageInImage
+        && diamond::fx::pictureProjectArea(effects, props, effect, projectArea);
     OfxPropertySetHandle outputClipProperties = nullptr;
-    const Image output(clip(effect, outputName, &outputClipProperties), time, true);
+    const Image output(clip(effect, outputName, &outputClipProperties), time, true,
+                       projectCanvas ? &projectArea : nullptr);
     const auto outputProperties = output.properties();
     const auto destination = imageView(outputProperties);
     auto format = pixelFormat(outputProperties);
@@ -616,8 +663,7 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     const double scaleX = positiveProperty(inArgs, kOfxImageEffectPropRenderScale, 0, 1.0);
     const double scaleY = positiveProperty(inArgs, kOfxImageEffectPropRenderScale, 1, 1.0);
     const double par = positiveProperty(outputProperties, kOfxImagePropPixelAspectRatio, 0, 1.0);
-    const auto field = stringProperty(outputProperties, kOfxImagePropField);
-    const double fieldScale = is(field, kOfxImageFieldLower) || is(field, kOfxImageFieldUpper) ? 0.5 : 1.0;
+    const double fieldScale = imageFieldScale(outputProperties);
     const double pixelAspect = par * scaleY * fieldScale / scaleX;
     const auto outputAlpha = premultiplication(outputProperties, outputClipProperties);
 
@@ -645,6 +691,24 @@ OfxStatus render(OfxImageEffectHandle effect, OfxPropertySetHandle inArgs, Kind 
     const auto source = inputFrame(input, sourceClipProperties, format);
     format.straightAlpha = format.components == 4
         && (outputAlpha ? is(outputAlpha, kOfxImageUnPreMultiplied) : source.format.straightAlpha);
+    if (kind == Kind::ImageInImage) {
+        const auto inputProperties = input.properties();
+        auto logicalSource = inputProperties
+            ? rectProperty(inputProperties, kOfxImagePropRegionOfDefinition, &source.view.bounds)
+            : source.view.bounds;
+        if (logicalSource.x2 <= logicalSource.x1 || logicalSource.y2 <= logicalSource.y1) {
+            logicalSource = source.view.bounds;
+        }
+        const double inputPar = positiveProperty(inputProperties, kOfxImagePropPixelAspectRatio, 0,
+            positiveProperty(sourceClipProperties, kOfxImagePropPixelAspectRatio, 0, par));
+        const double sourceField = imageFieldScale(inputProperties, fieldScale);
+        const diamond::fx::PictureRenderSpace picture{logicalSource, inputPar * scaleY * sourceField / scaleX};
+        const auto canvas = projectCanvas ? pixelArea(projectArea, scaleX / par, scaleY * fieldScale, frame) : frame;
+        diamond::fx::renderEffect(kind, {props, params, parameters(effect)}, source.view, source.format,
+            destination, format, canvas, window, pixelAspect, time, fps, aborted, effect, nullptr, {},
+            {diamond::Depth::Float, 4, false}, &picture);
+        return kOfxStatOK;
+    }
     if (kind == Kind::Shake) {
         const auto shake = settingsAt(effect, time);
         if (source.format.depth == format.depth && source.format.components == format.components
@@ -707,7 +771,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
             return kOfxStatReplyDefault;
         } else if (is(action, kOfxImageEffectActionGetRegionsOfInterest)) {
             return regionsOfInterest(effect, inArgs, outArgs, kind);
-        } else if (is(action, kOfxImageEffectActionGetRegionOfDefinition)) {
+        } else if (is(action, kOfxImageEffectActionGetRegionOfDefinition) || is(action, vegasGetRegion)) {
             if constexpr (kind == Kind::ImageInImage) {
                 OfxRectD area{};
                 if (diamond::fx::pictureProjectArea(effects, props, effect, area)) {
