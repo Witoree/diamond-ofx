@@ -133,25 +133,19 @@ bool validPictureQuad(const PictureQuad& quad) {
 }
 
 void renderImageInImage(const Context& context, const PictureSettings& settings) {
-    renderImageInImage(context, settings, {context.source.bounds, context.pixelAspect});
-}
-
-void renderImageInImage(const Context& context, const PictureSettings& settings, PictureRenderSpace space) {
-    const Rect input = space.sourceRegion;
+    const Rect input = context.source.bounds;
     const Rect frame = context.frame;
     const Rect window = context.output.bounds;
     const double columns = width(frame);
     const double rows = height(frame);
     const int sourceWidth = width(input);
     const int sourceHeight = height(input);
-    if (columns <= 0 || rows <= 0 || sourceWidth <= 0 || sourceHeight <= 0
-        || width(context.source.bounds) == 0 || height(context.source.bounds) == 0 || settings.opacity <= 0) {
+    if (columns <= 0 || rows <= 0 || sourceWidth <= 0 || sourceHeight <= 0 || settings.opacity <= 0) {
         return;
     }
     const double par = std::clamp(context.pixelAspect, 0.01, 100.0);
-    const double sourcePar = std::clamp(space.sourcePixelAspect, 0.01, 100.0);
     const auto quad = pictureQuad(settings, columns*par/rows,
-                                  static_cast<double>(sourceWidth)*sourcePar/sourceHeight);
+                                  static_cast<double>(sourceWidth)*par/sourceHeight);
     Projection projection;
     if (!projection.fromQuad(quad)) {
         return;
@@ -160,9 +154,9 @@ void renderImageInImage(const Context& context, const PictureSettings& settings,
     const double feather = rows * settings.feather * 0.01;
     const float opacity = static_cast<float>(settings.opacity);
     const auto sample = [&](PicturePoint point) {
-        const double srcX = input.x1 + std::clamp(point.x*sourceWidth - 0.5, 0.0, sourceWidth - 1.0);
-        const double srcY = input.y1 + std::clamp(point.y*sourceHeight - 0.5, 0.0, sourceHeight - 1.0);
-        return context.source.sample(srcX, srcY, Edge::Transparent);
+        const double srcX = input.x1 + std::clamp(point.x, 0.0, 1.0)*sourceWidth - 0.5;
+        const double srcY = input.y1 + std::clamp(point.y, 0.0, 1.0)*sourceHeight - 0.5;
+        return context.source.sample(srcX, srcY, Edge::Clamp);
     };
     const auto density = [sourceWidth, sourceHeight](PicturePoint a, PicturePoint b) {
         return std::max(std::abs(a.x-b.x)*sourceWidth, std::abs(a.y-b.y)*sourceHeight);

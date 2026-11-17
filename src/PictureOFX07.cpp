@@ -1,13 +1,11 @@
 #include "PictureOFX07.h"
 
-#include <ofxDrawSuite.h>
 #include <ofxInteract.h>
 #include <windows.h>
 #include <GL/gl.h>
 
 #include <atomic>
 #include <cstring>
-#include <limits>
 #include <memory>
 #include <mutex>
 
@@ -18,7 +16,6 @@ constexpr char locationName[] = "location";
 constexpr char perspectiveName[] = "perspective";
 constexpr char keyframeName[] = "keyframeHandles";
 constexpr char overlayName[] = "showHandles";
-std::atomic<bool> customOverlayRegistered{false};
 
 struct Number {
     const char* name;
@@ -67,7 +64,6 @@ void definePoint(Parameters parameters, const char* name, const char* label, Pic
     p->propSetDouble(prop, kOfxParamPropIncrement, 0, 0.005);
     p->propSetInt(prop, kOfxParamPropAnimates, 0, 1);
     p->propSetInt(prop, kOfxParamPropPluginMayWrite, 0, 1);
-    p->propSetInt(prop, kOfxParamPropUseHostOverlayHandle, 0, customOverlayRegistered.load() ? 0 : 1);
     p->propSetString(prop, kOfxParamPropHint, 0, hint);
 }
 
@@ -107,7 +103,6 @@ struct Services {
     const OfxImageEffectSuiteV1* effects;
     const OfxPropertySuiteV1* properties;
     const OfxParameterSuiteV1* params;
-    const OfxDrawSuiteV1* draw;
 };
 
 std::atomic<const OfxInteractSuiteV1*> interactSuite{nullptr};
@@ -132,15 +127,8 @@ struct Canvas {
 
     PicturePoint absolute(PicturePoint p) const { return {frame.x1 + p.x*width, frame.y1 + p.y*height}; }
     PicturePoint relative(PicturePoint p) const { return {(p.x-frame.x1)/width, (p.y-frame.y1)/height}; }
-    PicturePoint screenDelta(PicturePoint from, PicturePoint to) const {
-        return {(to.x-from.x)*width/pixelX, (to.y-from.y)*height/pixelY};
-    }
-    PicturePoint offset(PicturePoint p, double x, double y) const {
-        return {p.x + x*pixelX/width, p.y + y*pixelY/height};
-    }
     double distance(PicturePoint a, PicturePoint b) const {
-        const auto delta = screenDelta(a, b);
-        return std::hypot(delta.x, delta.y);
+        return std::hypot((a.x-b.x)*width/pixelX, (a.y-b.y)*height/pixelY);
     }
 };
 
@@ -175,153 +163,62 @@ bool getCanvas(Services services, OfxImageEffectHandle effect, OfxPropertySetHan
     return true;
 }
 
-constexpr double tau = 6.283185307179586;
-constexpr double radians = tau / 360;
-constexpr OfxRGBAColourF green{0.32f, 1.0f, 0.24f, 1.0f};
-constexpr OfxRGBAColourF red{1.0f, 0.32f, 0.27f, 1.0f};
-constexpr OfxRGBAColourF purple{0.86f, 0.61f, 1.0f, 1.0f};
-constexpr OfxRGBAColourF white{0.97f, 0.99f, 0.97f, 1.0f};
-constexpr OfxRGBAColourF black{0.08f, 0.1f, 0.08f, 1.0f};
-
-struct RotationGuide {
-    double radius;
-    PicturePoint grip;
-};
-
-RotationGuide rotationGuide(const Canvas& canvas, const PictureSettings& settings, const PictureQuad& quad) {
-    double clearance = std::numeric_limits<double>::infinity();
-    for (std::size_t i = 0; i < quad.size(); ++i) {
-        const auto side = canvas.screenDelta(quad[i], quad[(i+1)%quad.size()]);
-        const auto pivot = canvas.screenDelta(quad[i], settings.center);
-        const double length = std::hypot(side.x, side.y);
-        if (length > 1.0e-6) {
-            clearance = std::min(clearance, std::abs(side.x*pivot.y - side.y*pivot.x)/length);
-        }
-    }
-    const double radius = std::isfinite(clearance) ? std::max(8.0, 0.5*clearance) : 8.0;
-    const double angle = settings.rotation*radians;
-    const double dx = -std::sin(angle)/canvas.pixelX;
-    const double dy = std::cos(angle)/canvas.pixelY;
-    const double gain = radius/std::hypot(dx, dy);
-    return {radius, canvas.offset(settings.center, dx*gain, dy*gain)};
+PicturePoint rotationHandle(const Canvas& canvas, const PictureQuad& quad, PicturePoint center) {
+    const PicturePoint top{0.5*(quad[0].x + quad[1].x), 0.5*(quad[0].y + quad[1].y)};
+    const double span = canvas.distance(top, center);
+    const double offset = 24.0 / std::max(span, 1.0);
+    return {top.x + (top.x-center.x)*offset, top.y + (top.y-center.y)*offset};
 }
 
-struct Painter {
-    const Canvas& canvas;
-    const OfxDrawSuiteV1* suite = nullptr;
-    OfxDrawContextHandle context = nullptr;
-
-    template <std::size_t Size>
-    void shape(OfxDrawPrimitive primitive, const std::array<PicturePoint, Size>& points,
-               OfxRGBAColourF color, float width = 1) const {
-        if (suite) {
-            std::array<OfxPointD, Size> vertices{};
-            for (std::size_t i = 0; i < Size; ++i) {
-                const auto point = canvas.absolute(points[i]);
-                vertices[i] = {point.x, point.y};
-            }
-            require(suite->setColour(context, &color));
-            if (primitive != kOfxDrawPrimitivePolygon) {
-                require(suite->setLineWidth(context, width));
-            }
-            require(suite->draw(context, primitive, vertices.data(), static_cast<int>(Size)));
-            return;
-        }
-        const GLenum mode = primitive == kOfxDrawPrimitivePolygon ? GL_POLYGON
-            : primitive == kOfxDrawPrimitiveLines ? GL_LINES : GL_LINE_LOOP;
-        glColor4f(color.r, color.g, color.b, color.a);
-        glLineWidth(width);
-        glBegin(mode);
-        for (const auto point : points) {
-            const auto vertex = canvas.absolute(point);
-            glVertex2d(vertex.x, vertex.y);
-        }
-        glEnd();
-    }
-
-    template <std::size_t Size>
-    void outline(const std::array<PicturePoint, Size>& points, OfxRGBAColourF color,
-                 OfxDrawPrimitive primitive = kOfxDrawPrimitiveLineLoop) const {
-        shape(primitive, points, black, 3);
-        shape(primitive, points, color, 1.25f);
-    }
-};
-
-template <std::size_t Size>
-std::array<PicturePoint, Size> circle(const Canvas& canvas, PicturePoint center, double radius) {
-    std::array<PicturePoint, Size> points{};
-    for (std::size_t i = 0; i < Size; ++i) {
-        const double angle = tau*static_cast<double>(i)/Size;
-        points[i] = canvas.offset(center, radius*std::cos(angle), radius*std::sin(angle));
-    }
-    return points;
+void vertex(const Canvas& canvas, PicturePoint point) {
+    const auto p = canvas.absolute(point);
+    glVertex2d(p.x, p.y);
 }
 
-std::array<PicturePoint, 12> cornerGrip(const Canvas& canvas, PicturePoint center) {
-    std::array<PicturePoint, 12> points{{
-        {3, -5.5}, {4.75, -4.75}, {5.5, -3}, {5.5, 3}, {4.75, 4.75}, {3, 5.5},
-        {-3, 5.5}, {-4.75, 4.75}, {-5.5, 3}, {-5.5, -3}, {-4.75, -4.75}, {-3, -5.5}}};
-    for (auto& point : points) {
-        point = canvas.offset(center, point.x, point.y);
+void ring(const Canvas& canvas, PicturePoint point, bool diamond, double radius) {
+    constexpr double tau = 6.283185307179586;
+    const int count = diamond ? 4 : 18;
+    glBegin(GL_LINE_LOOP);
+    for (int i = 0; i < count; ++i) {
+        const double angle = tau*i/count;
+        vertex(canvas, {point.x + std::cos(angle)*radius*canvas.pixelX/canvas.width,
+                        point.y + std::sin(angle)*radius*canvas.pixelY/canvas.height});
     }
-    return points;
+    glEnd();
 }
 
-void paintGuides(const Painter& painter, const PictureSettings& settings, const PictureQuad& quad,
-                 const Drag& drag) {
-    const bool adjustingCorner = drag.mode == DragMode::Scale || drag.mode == DragMode::Corner;
-    const bool rotating = drag.mode == DragMode::Rotate;
-    const auto outlineColor = !validPictureQuad(quad) || adjustingCorner ? red : rotating ? purple : green;
-    const auto guide = rotationGuide(painter.canvas, settings, quad);
-    painter.outline(quad, outlineColor);
-    painter.outline(circle<64>(painter.canvas, settings.center, guide.radius), rotating ? purple : green);
-    painter.outline(std::array<PicturePoint, 2>{settings.center, guide.grip}, rotating ? purple : white,
-                    kOfxDrawPrimitiveLines);
-    for (std::size_t i = 0; i < quad.size(); ++i) {
-        const auto corner = cornerGrip(painter.canvas, quad[i]);
-        painter.shape(kOfxDrawPrimitivePolygon, corner, drag.corner == static_cast<int>(i) ? green : white);
-        painter.outline(corner, outlineColor);
-    }
-    const auto grip = circle<20>(painter.canvas, guide.grip, 5);
-    painter.shape(kOfxDrawPrimitivePolygon, grip, white);
-    painter.outline(grip, rotating ? purple : green);
-
-    const auto center = circle<20>(painter.canvas, settings.center, 4);
-    painter.shape(kOfxDrawPrimitivePolygon, center, black);
-    painter.outline(std::array<PicturePoint, 4>{painter.canvas.offset(settings.center, -7, 0),
-        painter.canvas.offset(settings.center, 7, 0), painter.canvas.offset(settings.center, 0, -7),
-        painter.canvas.offset(settings.center, 0, 7)}, drag.mode == DragMode::Move ? green : white,
-        kOfxDrawPrimitiveLines);
-}
-
-OfxStatus draw(const Canvas& canvas, const PictureSettings& settings, const PictureQuad& quad,
-               const Drag& drag, const OfxDrawSuiteV1* suite, OfxPropertySetHandle drawArgs,
-               const OfxPropertySuiteV1* properties) {
-    if (suite) {
-        void* drawContext = nullptr;
-        if (properties->propGetPointer(drawArgs, kOfxInteractPropDrawContext, 0, &drawContext) != kOfxStatOK
-            || !drawContext) {
-            return kOfxStatReplyDefault;
-        }
-        const auto context = static_cast<OfxDrawContextHandle>(drawContext);
-        if (suite->setLineStipple) {
-            suite->setLineStipple(context, kOfxDrawLineStipplePatternSolid);
-        }
-        paintGuides({canvas, suite, context}, settings, quad, drag);
-        return kOfxStatOK;
-    }
+void draw(const Canvas& canvas, const PictureSettings& settings, const PictureQuad& quad,
+          const Drag& drag) {
     if (!wglGetCurrentContext()) {
-        return kOfxStatReplyDefault;
+        return;
     }
     glPushAttrib(GL_ENABLE_BIT | GL_LINE_BIT | GL_CURRENT_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_LIGHTING);
-    glDisable(GL_LINE_STIPPLE);
-    glDisable(GL_CULL_FACE);
-    paintGuides({canvas}, settings, quad, drag);
+    glLineWidth(1.5f);
+    if (validPictureQuad(quad)) {
+        glColor3f(0.22f, 0.86f, 0.94f);
+    } else {
+        glColor3f(1.0f, 0.45f, 0.35f);
+    }
+    glBegin(GL_LINE_LOOP);
+    for (auto point : quad) {
+        vertex(canvas, point);
+    }
+    glEnd();
+    for (int i = 0; i < 4; ++i) {
+        if (drag.corner == i) {
+            glColor3f(1, 1, 1);
+        } else {
+            glColor3f(0.22f, 0.86f, 0.94f);
+        }
+        ring(canvas, quad[i], settings.perspective, 6);
+    }
+    glColor3f(1.0f, 0.83f, 0.42f);
+    ring(canvas, rotationHandle(canvas, quad, settings.center), false, 5);
+    ring(canvas, settings.center, false, 4);
     glPopAttrib();
-    return kOfxStatOK;
 }
 
 bool inside(const PictureQuad& quad, PicturePoint point) {
@@ -409,7 +306,7 @@ void finishEdit(Drag& drag, Parameters parameters) {
 }
 
 OfxStatus pictureInteract(const char* action, const void* handle, OfxPropertySetHandle inArgs,
-                          bool useDrawSuite) {
+                          OfxPropertySetHandle) {
     try {
         if (std::strcmp(action, kOfxActionDescribe) == 0) {
             return kOfxStatOK;
@@ -488,8 +385,8 @@ OfxStatus pictureInteract(const char* action, const void* handle, OfxPropertySet
         const auto settings = pictureSettingsAt(parameters, time);
         const auto quad = pictureQuad(settings, canvas.aspect, canvas.sourceAspect);
         if (drawing) {
-            return draw(canvas, settings, quad, *drag, useDrawSuite ? services.draw : nullptr,
-                        inArgs, services.properties);
+            draw(canvas, settings, quad, *drag);
+            return kOfxStatOK;
         }
         double pen[2]{};
         require(services.properties->propGetDoubleN(inArgs, kOfxInteractPropPenPosition, 2, pen));
@@ -506,19 +403,12 @@ OfxStatus pictureInteract(const char* action, const void* handle, OfxPropertySet
             }
             if (drag->corner >= 0) {
                 drag->mode = settings.perspective ? DragMode::Corner : DragMode::Scale;
+            } else if (canvas.distance(position, rotationHandle(canvas, quad, settings.center)) < 10) {
+                drag->mode = DragMode::Rotate;
+            } else if (inside(quad, position) || canvas.distance(position, settings.center) < 9) {
+                drag->mode = DragMode::Move;
             } else {
-                const auto guide = rotationGuide(canvas, settings, quad);
-                const double distanceToCenter = canvas.distance(position, settings.center);
-                if (distanceToCenter <= std::min(7.0, .55*guide.radius)) {
-                    drag->mode = DragMode::Move;
-                } else if (std::abs(distanceToCenter - guide.radius) <= 5
-                           || canvas.distance(position, guide.grip) <= 8) {
-                    drag->mode = DragMode::Rotate;
-                } else if (inside(quad, position)) {
-                    drag->mode = DragMode::Move;
-                } else {
-                    return kOfxStatReplyDefault;
-                }
+                return kOfxStatReplyDefault;
             }
             drag->settings = settings;
             drag->quad = quad;
@@ -539,16 +429,6 @@ OfxStatus pictureInteract(const char* action, const void* handle, OfxPropertySet
     } catch (...) {
         return kOfxStatFailed;
     }
-}
-
-OfxStatus pictureInteractV1(const char* action, const void* handle, OfxPropertySetHandle inArgs,
-                            OfxPropertySetHandle) {
-    return pictureInteract(action, handle, inArgs, false);
-}
-
-OfxStatus pictureInteractV2(const char* action, const void* handle, OfxPropertySetHandle inArgs,
-                            OfxPropertySetHandle) {
-    return pictureInteract(action, handle, inArgs, true);
 }
 
 } // namespace
@@ -605,28 +485,14 @@ PictureSettings pictureSettingsAt(Parameters parameters, OfxTime time) {
 bool pictureProjectArea(const OfxImageEffectSuiteV1* effects, const OfxPropertySuiteV1* props,
                         OfxImageEffectHandle effect, OfxRectD& area) {
     OfxPropertySetHandle properties = nullptr;
-    if (effects->getPropertySet(effect, &properties) != kOfxStatOK || !properties) {
-        return false;
-    }
-    const auto readSize = [&](const char* name, double (&size)[2]) {
-        return props->propGetDoubleN(properties, name, 2, size) == kOfxStatOK
-            && std::isfinite(size[0]) && std::isfinite(size[1]) && size[0] > 0 && size[1] > 0;
-    };
-    double size[2]{};
-    if (readSize(kOfxImageEffectPropProjectExtent, size)) {
-        area = {0, 0, size[0], size[1]};
+    double extent[2]{};
+    if (effects->getPropertySet(effect, &properties) == kOfxStatOK && properties
+        && props->propGetDoubleN(properties, kOfxImageEffectPropProjectExtent, 2, extent) == kOfxStatOK
+        && std::isfinite(extent[0]) && std::isfinite(extent[1]) && extent[0] > 0 && extent[1] > 0) {
+        area = {0, 0, extent[0], extent[1]};
         return true;
     }
-    if (!readSize(kOfxImageEffectPropProjectSize, size)) {
-        return false;
-    }
-    double origin[2]{};
-    if (props->propGetDoubleN(properties, kOfxImageEffectPropProjectOffset, 2, origin) != kOfxStatOK
-        || !std::isfinite(origin[0]) || !std::isfinite(origin[1])) {
-        origin[0] = origin[1] = 0;
-    }
-    area = {origin[0], origin[1], origin[0] + size[0], origin[1] + size[1]};
-    return std::isfinite(area.x2) && std::isfinite(area.y2) && area.x2 > area.x1 && area.y2 > area.y1;
+    return false;
 }
 
 void registerPictureOverlay(const OfxHost* host, const OfxImageEffectSuiteV1* effects, Parameters parameters,
@@ -638,18 +504,12 @@ void registerPictureOverlay(const OfxHost* host, const OfxImageEffectSuiteV1* ef
     }
     const auto* interact = static_cast<const OfxInteractSuiteV1*>(host->fetchSuite(host->host, kOfxInteractSuite, 1));
     if (interact && interact->interactGetPropertySet) {
-        const auto* draw = static_cast<const OfxDrawSuiteV1*>(host->fetchSuite(host->host, kOfxDrawSuite, 1));
         std::call_once(overlayInit, [&] {
-            overlayServices = {effects, parameters.properties, parameters.suite, draw};
+            overlayServices = {effects, parameters.properties, parameters.suite};
             interactSuite.store(interact);
         });
-        const auto setEntry = [&](const char* property, OfxPluginEntryPoint* entry) {
-            return parameters.properties->propSetPointer(descriptor, property, 0,
-                reinterpret_cast<void*>(entry)) == kOfxStatOK;
-        };
-        const bool v2 = draw && draw->setColour && draw->setLineWidth && draw->draw
-            && setEntry(kOfxImageEffectPluginPropOverlayInteractV2, &pictureInteractV2);
-        customOverlayRegistered.store(v2 || setEntry(kOfxImageEffectPluginPropOverlayInteractV1, &pictureInteractV1));
+        parameters.properties->propSetPointer(descriptor, kOfxImageEffectPluginPropOverlayInteractV1, 0,
+                                              reinterpret_cast<void*>(&pictureInteract));
     }
 }
 

@@ -27,16 +27,10 @@ struct PictureSettings {
     int quality = 1;
 };
 
-struct PictureRenderSpace {
-    Rect sourceRegion;
-    double sourcePixelAspect;
-};
-
 PictureQuad pictureQuad(const PictureSettings&, double canvasAspect, double sourceAspect);
 PicturePoint pictureLocalPoint(const PictureSettings&, double canvasAspect, double sourceAspect,
                                PicturePoint canvasPoint);
 bool validPictureQuad(const PictureQuad&);
 void renderImageInImage(const Context&, const PictureSettings&);
-void renderImageInImage(const Context&, const PictureSettings&, PictureRenderSpace);
 
 } // namespace diamond::fx

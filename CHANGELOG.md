@@ -1,10 +1,5 @@
 # Changelog
 
-## 0.07.1
-
-- Updated `D_ImageInImage` to request the project canvas in VEGAS and keep source dimensions separate from output bounds.
-- Added a green preview outline, corner grips, and rotation ring on hosts with OpenFX overlay support.
-
 ## 0.07
 
 - Added ten lighting, compositing, and grain effects.

@@ -1,5 +1,4 @@
 #include "EffectsHost.h"
-#include "PictureOFX07.h"
 
 #include <cstdint>
 #include <cstddef>
@@ -181,8 +180,7 @@ void encodeImage(MutableImageView destination, PixelFormat format, const Context
 void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelFormat inputFormat,
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
-                  void* abortContext, const ShakeSettings* shake, ImageView normals, PixelFormat normalsFormat,
-                  const PictureRenderSpace* picture) {
+                  void* abortContext, const ShakeSettings* shake, ImageView normals, PixelFormat normalsFormat) {
     window = intersect(window, destination.bounds);
     if (!destination.data || empty(window) || (abort && abort(abortContext))) {
         return;
@@ -208,8 +206,6 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
         diamond::renderShake({decoded.data(), stride(decoded.bounds), decoded.bounds},
             {output.data(), stride(output.bounds), output.bounds}, frame, window, Depth::Float, 4,
             timeFrames / fps, 1.0 / fps, pixelAspect, false, *shake, Cancellation::poll, &cancellation);
-    } else if (kind == Kind::ImageInImage && picture) {
-        renderImageInImage(context, pictureSettingsAt(parameters, timeFrames), *picture);
     } else {
         Image normalMap(normalsFormat.components >= 3 ? checkedSourceBounds(normals, normalsFormat) : Rect{});
         const bool mapped = !empty(normalMap.bounds);

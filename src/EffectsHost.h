@@ -37,8 +37,6 @@ struct PixelFormat {
     bool straightAlpha;
 };
 
-struct PictureRenderSpace;
-
 constexpr bool isTransition(Kind kind) {
     return kind >= Kind::Dissolve && kind <= Kind::SwishPan;
 }
@@ -54,7 +52,7 @@ void renderEffect(Kind kind, Parameters parameters, ImageView source, PixelForma
                   MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
                   double pixelAspect, double timeFrames, double fps, bool (*abort)(void*),
                   void* abortContext, const ShakeSettings* shake = nullptr, ImageView normals = {},
-                  PixelFormat normalsFormat = {Depth::Float, 4, false}, const PictureRenderSpace* picture = nullptr);
+                  PixelFormat normalsFormat = {Depth::Float, 4, false});
 void renderTransitionEffect(TransitionKind kind, const TransitionSettings& settings, double progress,
                             ImageView from, PixelFormat fromFormat, ImageView to, PixelFormat toFormat,
                             MutableImageView destination, PixelFormat outputFormat, Rect frame, Rect window,
